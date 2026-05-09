@@ -1,0 +1,62 @@
+@startuml
+
+object magic_box{
+components
+shopping list
+next_to_do
+}
+
+object components{
+Der ESP32 (Das Gehirn)
+ESP Terminal Adapter
+Der Linearaktuator (Der Arbeiter)
+Der Motortreiber (L9110S) (Verbinndung zwischen Linearaktuator und ESP)
+Die Batterie18650
+Batteriehalter
+Solarpannel (Das Kraftwerk)
+TP4056 Modul mit Schutzschaltung 6 Anschlüsse (Regelung der Stromversorgung) (Berry Base)
+Wago-Klemmen
+}
+
+object EspBoards{
+Modells: Esp 32 DevKit V1 (allrounder), ESP 32-C3 (Mini)
+
+Conversation via: Esp Now
+Modes: Deep Sleep
+Sprache: MicroPython
+
+Brain of the project:
+Working as intermediate between other devices as the LineaAktuator and the motortreiber L9110S oder L298N
+
+
+}
+
+object shopping_list{
+Der ESP32, ESP Terminal Adapter (Das Gehirn)
+Der Linearaktuator (Der Arbeiter) (Funduino)
+Der Motortreiber (L9110S) (Verbinndung zwischen Linearaktuator und ESP)
+Die Batterie+Batteriehalter, das Solarpannel (Das Kraftwerk)
+TP4056 Modul mit Schutzschaltung 6 Anschlüsse (Regelung der Stromversorgung)
+Wago-Klemmen
+}
+
+object shopping_list_privat{
+Lötkolben
+Platinen
+Lötzinn
+Lötschwamm
+}
+
+object to_do{
++component komposition
++esp now kommunikation einlesn
++kommunikation zwischen esp und motor treiber
+}
+
+magic_box <|-- to_do
+magic_box <|-- shopping_list
+magic_box <|-- components
+magic_box <|--shopping_list_privat
+components *-- EspBoards
+
+@enduml

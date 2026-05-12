@@ -6,57 +6,64 @@ shopping list
 next_to_do
 }
 
-object components{
-Der ESP32 (Das Gehirn)
-ESP Terminal Adapter
-Der Linearaktuator (Der Arbeiter)
-Der Motortreiber (L9110S) (Verbinndung zwischen Linearaktuator und ESP)
-Die Batterie18650
-Batteriehalter
-Solarpannel (Das Kraftwerk)
-TP4056 Modul mit Schutzschaltung 6 Anschlüsse (Regelung der Stromversorgung) (Berry Base)
-Wago-Klemmen
+object component_architecture{
+-brain
+-worker
+-intermediates
+-power generation, storage, managment
 }
 
-object EspBoards{
-Modells: Esp 32 DevKit V1 (allrounder), ESP 32-C3 (Mini)
+object worker_and_brain{
++(Das Gehirn) Esp32
++(Der Arbeiter) Linearaktuator / Servo
++(intermediäre zw. Arbeiter und Gehirn) Treiber
+}
 
-Conversation via: Esp Now
-Modes: Deep Sleep
-Sprache: MicroPython
-
-Brain of the project:
-Working as intermediate between other devices as the LineaAktuator and the motortreiber L9110S oder L298N
-
-
+object power_management{
++(Producer): solarpanel
++(Intermediate between storage, producent and clients): solar power manager modul
++(Energie Storage): batteries
 }
 
 object shopping_list{
-Der ESP32, ESP Terminal Adapter (Das Gehirn)
-Der Linearaktuator (Der Arbeiter) (Funduino)
-Der Motortreiber (L9110S) (Verbinndung zwischen Linearaktuator und ESP)
-Die Batterie+Batteriehalter, das Solarpannel (Das Kraftwerk)
-TP4056 Modul mit Schutzschaltung 6 Anschlüsse (Regelung der Stromversorgung)
-Wago-Klemmen
+ESP32 USB-C WROOM 4 MB Devkit V1 Board mit WLAN, Bluetooth und Dual-Core-Prozessor (OT1011) (Otronik)
+Breakout-Board für ESP32 Devkit V1 mit Schraubklemmen (Otronik)
+Mikro Linearantrieb / Hubstange, 8mm Ø, 3~5mm/s, 3-6V - 30 bis 130mm Hub (Funduino)
+Servo + servoarm + Verlängerung (Günstiger als der Linear Aktuator)
+HG7881 (L9110S) H-Brücke/Motortreiber mit zwei Kanälen (Verbinndung zwischen Linearaktuator und ESP) (Funduino)
+Die Batterie+Batteriehalter+Batterie18650 (BerryBase)
+Ladeplatine für 3,7V LiIon / LiPo Akkus, mit Ausgang, USB Type C Buchse > Lötpads, 1000mA (BerryBase) (günstigere Alternative, falls Projekt günstiger werden soll)
+Waveshare Semi-flexibles Polykristallines Silizium-Solarpanel, DC5521, 5V USB-Ausgänge, 18V, 10W (BerryBase)
+Waveshare Solar Power Manager Modul D, 5V/3A, USB-C, für 6V-24V Solarpanels, ohne Batteriehalter(Teurere Version, keine Probleme mit Spannungsversorgung)
 }
 
-object shopping_list_privat{
-Lötkolben
+object shopping_list_private{
+Platinenhalter
+Lötschwamm (Metall)
+helfende Arme
 Platinen
+Kabel
 Lötzinn
-Lötschwamm
+}
+
+object stores{
+BerryBase
+Fundoino
+Otronic
 }
 
 object to_do{
-+component komposition
-+esp now kommunikation einlesn
-+kommunikation zwischen esp und motor treiber
++shopping list / component komposition
++esp now kommunikation einlesen
 }
 
-magic_box <|-- to_do
-magic_box <|-- shopping_list
-magic_box <|-- components
-magic_box <|--shopping_list_privat
-components *-- EspBoards
+magic_box *-- to_do
+magic_box *-- component_architecture
+to_do *--shopping_list_private
+component_architecture *-- worker_and_brain
+component_architecture *-- power_management
+component_architecture *-- shopping_list
+shopping_list ..> stores :Sources of Supply
 
 @enduml
+

@@ -26,15 +26,20 @@ object power_management{
 }
 
 object shopping_list{
-ESP32 USB-C WROOM 4 MB Devkit V1 Board mit WLAN, Bluetooth und Dual-Core-Prozessor (OT1011) (Otronik)
-Breakout-Board für ESP32 Devkit V1 mit Schraubklemmen (Otronik)
-Mikro Linearantrieb / Hubstange, 8mm Ø, 3~5mm/s, 3-6V - 30 bis 130mm Hub (Funduino)
-Servo + servoarm + Verlängerung (Günstiger als der Linear Aktuator)
-HG7881 (L9110S) H-Brücke/Motortreiber mit zwei Kanälen (Verbinndung zwischen Linearaktuator und ESP) (Funduino)
-Die Batterie+Batteriehalter+Batterie18650 (BerryBase)
-Ladeplatine für 3,7V LiIon / LiPo Akkus, mit Ausgang, USB Type C Buchse > Lötpads, 1000mA (BerryBase) (günstigere Alternative, falls Projekt günstiger werden soll)
-Waveshare Semi-flexibles Polykristallines Silizium-Solarpanel, DC5521, 5V USB-Ausgänge, 18V, 10W (BerryBase)
-Waveshare Solar Power Manager Modul D, 5V/3A, USB-C, für 6V-24V Solarpanels, ohne Batteriehalter(Teurere Version, keine Probleme mit Spannungsversorgung)
++preferred
+-cheaper alternative
+
+price range: [70-120] [eu]
+
++ESP32 USB-C WROOM 4 MB Devkit V1 Board mit WLAN, Bluetooth und Dual-Core-Prozessor (OT1011) (Otronik)
++Breakout-Board für ESP32 Devkit V1 mit Schraubklemmen (Otronik)
++Mikro Linearantrieb / Hubstange, 8mm Ø, 3~5mm/s, 3-6V - 30 bis 130mm Hub (Funduino)
+-Servo + servoarm + Verlängerung (Günstiger als der Linear Aktuator)
+-HG7881 (L9110S) H-Brücke/Motortreiber mit zwei Kanälen (Verbinndung zwischen Linearaktuator und ESP) (Funduino)
++Die Batterie+Batteriehalter+Batterie18650 (BerryBase)
+-Ladeplatine für 3,7V LiIon / LiPo Akkus, mit Ausgang, USB Type C Buchse > Lötpads, 1000mA (BerryBase) (günstigere Alternative, falls Projekt günstiger werden soll)
++Waveshare Semi-flexibles Polykristallines Silizium-Solarpanel, DC5521, 5V USB-Ausgänge, 18V, 10W (BerryBase)
++Waveshare Solar Power Manager Modul D, 5V/3A, USB-C, für 6V-24V Solarpanels, ohne Batteriehalter(Teurere Version, keine Probleme mit Spannungsversorgung)
 }
 
 object shopping_list_private{

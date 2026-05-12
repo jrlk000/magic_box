@@ -9,7 +9,7 @@ next_to_do
 object component_architecture{
 -brain
 -worker
--intermediates
+-intermediaries
 -power generation, storage, managment
 }
 

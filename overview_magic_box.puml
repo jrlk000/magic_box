@@ -1,45 +1,21 @@
 @startuml
-
 object magic_box{
 components
 shopping list
 next_to_do
 }
 
-object component_architecture{
--brain
--worker
--intermediaries
--power generation, storage, managment
+object to_do{
++Architektur 2 erstellen mit besprochenen Änderungen
++RFID Technologie ausprobieren, präferierte alternative zu Esp-now
++Öffnungsmechanismus mit Gasdruckfedern automatisieren
++Holzkiste und Gasdruckfeder besorgen bei Obi
 }
 
-object worker_and_brain{
-+(Das Gehirn) Esp32
-+(Der Arbeiter) Linearaktuator / Servo
-+(intermediäre zw. Arbeiter und Gehirn) Treiber
-}
-
-object power_management{
-+(Producer): solarpanel
-+(Intermediate between storage, producent and clients): solar power manager modul
-+(Energie Storage): batteries
-}
-
-object shopping_list{
-+preferred
--cheaper alternative
-
-price range: [70-120] [eu]
-
-+ESP32 USB-C WROOM 4 MB Devkit V1 Board mit WLAN, Bluetooth und Dual-Core-Prozessor (OT1011) (Otronik)
-+Breakout-Board für ESP32 Devkit V1 mit Schraubklemmen (Otronik)
-+Mikro Linearantrieb / Hubstange, 8mm Ø, 3~5mm/s, 3-6V - 30 bis 130mm Hub (Funduino)
--Servo + servoarm + Verlängerung (Günstiger als der Linear Aktuator)
--HG7881 (L9110S) H-Brücke/Motortreiber mit zwei Kanälen (Verbinndung zwischen Linearaktuator und ESP) (Funduino)
-+Die Batterie+Batteriehalter+Batterie18650 (BerryBase)
--Ladeplatine für 3,7V LiIon / LiPo Akkus, mit Ausgang, USB Type C Buchse > Lötpads, 1000mA (BerryBase) (günstigere Alternative, falls Projekt günstiger werden soll)
-+Waveshare Semi-flexibles Polykristallines Silizium-Solarpanel, DC5521, 5V USB-Ausgänge, 18V, 10W (BerryBase)
-+Waveshare Solar Power Manager Modul D, 5V/3A, USB-C, für 6V-24V Solarpanels, ohne Batteriehalter(Teurere Version, keine Probleme mit Spannungsversorgung)
+object stores{
+BerryBase
+Fundoino
+Otronic
 }
 
 object shopping_list_private{
@@ -51,24 +27,11 @@ Kabel
 Lötzinn
 }
 
-object stores{
-BerryBase
-Fundoino
-Otronic
-}
 
-object to_do{
-+shopping list / component komposition
-+esp now kommunikation einlesen
-}
 
 magic_box *-- to_do
-magic_box *-- component_architecture
-to_do *--shopping_list_private
-component_architecture *-- worker_and_brain
-component_architecture *-- power_management
-component_architecture *-- shopping_list
-shopping_list ..> stores :Sources of Supply
+magic_box *-- shopping_list_private
+shopping_list_private ..> stores :Sources of Supply
 
 @enduml
 

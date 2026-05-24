@@ -1,0 +1,37 @@
+@startuml
+class rfid {
+SDA_PIN : int
+SCK_PIN : int
+MOSI_PIN : int
+MISO_PIN : int
+PIN_RST : int
+
+SPI_ID : int
+SPI_BAUDRATE : int
+SPI_POLARITY : int
+SPI_PHASE : int
+
+DELAY_BETWEEN_READS : int
+DELAY_CPU_REST : int
+
+BEKANNTE_KARTEN : dict
+
++fuehre_vorgang_aus(vorgnags_name : str) -> None
+
++ init_rfid_reader() -> MFRC522
+
++run() -> None
+}
+
+class mfrc522{
+spi : Spi
+sda : Pin
+rst : Pin
+
++__init__(spi, sda_pin, rst_pin)
++anticoll()
++select_tag(ser)
+}
+
+rfid *-- mfrc522
+@enduml

@@ -62,8 +62,8 @@ Dieses Modul liest RFID-Tags über ein RC522-Modul an einem ESP32 aus
 und löst basierrend auf der erkannten Karten-ID spezifische Aktionen aus.
 """
 
+import time
 from machine import Pin, SPI
-from time import sleep
 from mfrc522 import MFRC522 #RFID Bibliothek
 from ucollections import namedtuple #Enum equivalent
 
@@ -85,40 +85,32 @@ SPI_PHASE = 0
 #Zeitliche Parameter (in Sekunden)
 DELAY_BETWEEN_READS = 1.5
 DELAY_CPU_REST = 0.1
+LERN_ZEIT = 30000
 
 #Bekannte Karten -IDs und die dazugehörigen Vorgänge
-VorgaengeType = namedtuple("Vorgänge", ["LERNEN"])
+VorgaengeType = namedtuple("Vorgänge", ["LERNEN", "DEFAULT"])
 
-Vorgaenge = VorgaengeType("vorgang_lernen")
+Vorgaenge = VorgaengeType(LERNEN="vorgang_lernen", DEFAULT="vorgang_default")
 
+#Vorgaenge.LERNEN
 BEKANNTE_KARTEN = {
+    "0x88045F42" : Vorgaenge.LERNEN
 }
 
 # ---- Funktionen ----
 
-def fuehre_vorgang_aus(vorgangs_name: str) -> None:
+def to_deci_hex(raw)->int:
     """
-    Führt eine definierte Aktion basierrend auf dem Vorgangsnamen aus.
-
-    Diese Funktion dient als Router für die verschiedenen Aktionen,
-    die durch die RFID-Karten getriggert werden sollen.
-
-    Parameters
-    ----------
-    vorgangs_name : str
-        Ser interne Name des Vorgangs (Schlüsselwort), der ausgeführt werden soll.
+    Konvertiere in eine hex zahl mit zwei stellen für jede Hex Zahl.
+    Param
+    -----
+    raw : rohes aufgenommenes Karten signal
 
     Returns
     -------
-    None
+    int : Hex identifier
     """
-    """print(f"-> Starte Vorgang: {vorgangs_name}")
-
-    if vorgangs_name == Vorgaenge.LERNEN:
-        
-    else:
-        print("[ERROR] Vorgang ist nicht implementiert.")"""
-
+    return "0x" + "".join([f"{x:02X}" for x in raw[:4]])
 
 def init_rfid_reader() -> MFRC522:
     """
@@ -142,13 +134,90 @@ def init_rfid_reader() -> MFRC522:
                   sck=Pin(PIN_SCK), mosi=Pin(PIN_MOSI), miso=Pin(PIN_MISO))
 
     # 2. Das fertige SPI-Werkzeug an den Reader übergeben (Dependency Injection)
-    reader = MFRC522(spi=spi_bus, cs_pin=PIN_CS, rst_pin=PIN_RST)
+    reader = MFRC522(spi=spi_bus, sda_pin=PIN_SDA, rst_pin=PIN_RST)
     print("RFID-Reader erfolgreich gestartet!")
-
     return reader
-    #return MFRC522(spi, PIN_SDA, PIN_RST)
 
-def main() -> None:
+def fuehre_vorgang_aus(vorgangs_name: str, reader:MFRC522) -> None:
+    """
+    Führt eine definierte Aktion basierrend auf dem Vorgangsnamen aus.
+
+    Diese Funktion dient als Router für die verschiedenen Aktionen,
+    die durch die RFID-Karten getriggert werden sollen.
+
+    Parameters
+    ----------
+    vorgangs_name : str
+        Ser interne Name des Vorgangs (Schlüsselwort), der ausgeführt werden soll.
+
+    Returns
+    -------
+    None
+    """
+    print(f"-> Starte Vorgang: {vorgangs_name}")
+
+    if vorgangs_name == Vorgaenge.LERNEN:
+        lernen(reader)
+    elif vorgangs_name == Vorgaenge.Default:
+        print("[AKTION] Zukünftig beliebig erweiterbar.")
+    else:
+        print("[ERROR] Vorgang ist nicht implementiert.")
+    return None
+
+def lernen(reader)->None:
+    """
+    Lernmodus des RFID-Kartenlesers.
+    Während definierter Zeitspanne könne neue Karten eingelesen werden.
+
+    !!!Momnetan nur default vorgänge vorgesehen.
+    Param
+    -----
+    reader : MFRC522
+        RFID Kartenleser instanz.
+
+    Returns
+    -------
+    None
+    """
+    print("--- LERNMODUS AKTIV ---")
+    print(f"Zeitfenster: {LERN_ZEIT/1e3} [sek]. Bitte Karte zum hinzufügen vorhalten.")
+
+    # ---- Zeitmessung Start----
+    start_zeit = time.ticks_ms()
+    end_zeit = time.ticks_add(start_zeit, LERN_ZEIT)
+
+    while time.ticks_diff(end_zeit, time.ticks_ms()) > 0:
+
+        (status, tag_type) = reader.request(reader.REQIDL)
+
+        if status != reader.OK:
+            time.sleep(DELAY_CPU_REST)
+            continue
+
+        # Karte is im Feld!
+        (status, raw_uid) = reader.anticoll()
+
+        if status == reader.OK:
+            card_id = to_deci_hex(raw_uid)
+            print(f"\nKarte erkannt! ID: {card_id}")
+
+            # Prüfe ob Karte in der Datenbank registriert ist
+            if card_id in BEKANNTE_KARTEN:
+                print("-> Larte ist dem System bereits bekannt. Wird ignoriert.")
+            else:
+                # Momentan keine anderen Vorgänge als der Lern Modus vorgesehen somit default Zuweisung.
+                BEKANNTE_KARTEN[card_id] = Vorgaenge.DEFAULT
+                print("-> ERFOLG: Neue Karte gespeichert!")
+
+            time.sleep(DELAY_BETWEEN_READS)
+            print(f"Bereit für nächste Karte... "
+                  f"(Verbleibende Lernzeit: {time.ticks_diff(end_zeit, time.ticks_ms()) // 1e3:.3f}s)")
+
+    print("\n--- LERNMODUS BEENDET ---")
+    print("Kehre zum normalen Betriebsmodus zurück...\n")
+    return None
+
+def run() -> None:
     """
     Hauptschleife des RFID-Readers.
 
@@ -174,45 +243,55 @@ def main() -> None:
     """
     reader = init_rfid_reader()
 
-    print("Warte auf Karte. ",
-          "\nBitte Karte vorhalten...")
+    print("\nSystem bereit. Warte auf Karte...")
 
     try:
         while True:
-            # Nach einer Karte suchen (Weckruf)
-            #Nur nicht initialisierrte Karten werden geweckt für permanentes anspringen auf signal REQALL
+            # Weckruf
             (status, tag_type) = reader.request(reader.REQIDL)
 
+            if status != reader.OK:
+                time.sleep(DELAY_CPU_REST)
+                continue
+
+            (status, raw_uid) = reader.anticoll()
+
             if status == reader.OK:
-                # ID der Karte auslesen
-                # (2) ID-Abfrage Antikollision
-                # (3) Select, Auswahl welche Karte ihre UID schicken darf,
-                # sendet Signal um HALT und SENDE zustand im Chip auszulösen
-                # (sobald weg vom sender ist chip aber wieder in Werkseinstellungen).
-                (status, raw_uid) = reader.anticoll()
+                card_id = to_deci_hex(raw_uid)
+                print(f"\nKarte erkannt! ID: {card_id}")
 
-                if status == reader.OK:
-                    # Die ID in einen lesbaren Hex-String umwandeln
-                    card_id = "0x" + "".join([f"{x:02X}" for x in raw_uid[:4]]) #Breite von zwei Zeiche um Injectivität zu wahren
-                    print(f"\nKarte erkannt! ID: {card_id}")
+                # Prüfe ob Karte in der Datenbank registriert ist
+                if card_id in BEKANNTE_KARTEN:
+                    vorgang = BEKANNTE_KARTEN[card_id]
+                    fuehre_vorgang_aus(vorgang, reader)
+                else:
+                    print("[INFO] Unbekannte Karte. Keine Aktion hinterlegt.")
 
-                    #Prüfe ob Karte in der Datenbank registriert ist
-                    if card_id in BEKANNTE_KARTEN:
-                        vorgang = BEKANNTE_KARTEN[card_id]
-                        fuehre_vorgang_aus(vorgang)
-                    else:
-                        print("[INFO] Unbekannte Karte. Keine Aktion hinterlegt.")
+                # Pause, damit selber Scan nicht mehrfach getriggert wird.
+                time.sleep(DELAY_BETWEEN_READS)
+                print("Bereit für nächste Karte...")
 
-                    #Pause, damit selber Scan nicht mehrfach getriggert wird.
-                    sleep(DELAY_BETWEEN_READS)
-                    print("Bereit für nächste Karte...")
+    #OS - Operating System - Betriebssystem
+    except OSError:
+        print("[FEHLER] Kabel zum RFID-Reader abgerissen! Versuche Neustart...")
+        time.sleep(2)
+        init_rfid_reader()  # Versucht die Hardware neu zu starten, Skript läuft weiter!
 
-            sleep(DELAY_CPU_REST)
+    except ValueError as e:
+        print(f"[FEHLER] Datenmüll auf der Karte gelesen: {e}")
+        # Skript ignoriert die kaputte Karte und läuft weiter!
 
-    except KeyboardInterrupt:
-        print("\nProgramm regulär beendet.")
+    return None
 
 # ---- PROGRAMMSTART----
-
 if __name__ == "__main__":
-    main()
+    try:
+        run()
+    except KeyboardInterrupt:
+        print("\n[System] Programm durch Benutzer beendet.")
+
+"""
+KeyboardInterrup absolute ausnahme bezüglich der Platzierung 
+- eigentlich möglichst selektiv und so nah am Uhrsprung des Fehlers wie möglich-
+hier muss aber das Programm von jedem Ausgangspunkt gekillt werden können durch den User. 
+"""

@@ -3,20 +3,31 @@ import time
 
 
 class MFRC522:
+    OK = 0
+    NOTAGERR = 1
+    ERR = 2
+
+    REQIDL = 0x26
+    REQALL = 0x52
+    AUTHENT1A = 0x60
+    AUTHENT1B = 0x61
 
     def __init__(self, spi, sda_pin, rst_pin):
         """
         Moderne, plattformunabhängige Initialisierung.
-        :param spi: Ein fertig konfiguriertes machine.SPI Objekt
-        :param sda_pin: Die Pin-Nummer für Chip Select (SDA)
-        :param rst_pin: Die Pin-Nummer für Reset
+
+        Params
+        ------
+        spi: Ein fertig konfiguriertes machine.SPI Objekt
+        sda_pin: Die Pin-Nummer für Chip Select (SDA)
+        rst_pin: Die Pin-Nummer für Reset
         """
         self.spi = spi
-        self.cs = Pin(sda_pin, Pin.OUT)
+        self.sda = Pin(sda_pin, Pin.OUT)
         self.rst = Pin(rst_pin, Pin.OUT)
 
         # Saubere Hardware-Reset-Sequenz
-        self.cs.value(1)
+        self.sda.value(1)
         self.rst.value(0)
         time.sleep_ms(50)
         self.rst.value(1)
@@ -26,17 +37,17 @@ class MFRC522:
 
     def _wreg(self, reg, val):
 
-        self.cs.value(0)
+        self.sda.value(0)
         self.spi.write(b'%c' % int(0xff & ((reg << 1) & 0x7e)))
         self.spi.write(b'%c' % int(0xff & val))
-        self.cs.value(1)
+        self.sda.value(1)
 
     def _rreg(self, reg):
 
-        self.cs.value(0)
+        self.sda.value(0)
         self.spi.write(b'%c' % int(0xff & (((reg << 1) & 0x7e) | 0x80)))
         val = self.spi.read(1)
-        self.cs.value(1)
+        self.sda.value(1)
 
         return val[0]
 

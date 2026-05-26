@@ -1,0 +1,134 @@
+@startuml
+class solar_pannel {
+20-30 W
+}
+
+class akku{
+LiFePO4 (80% doC)
+Battery Managment System
+8-10 Ah
+12 V
+}
+
+class solar_laderegler{
+MPPT Tracker
+}
+
+class BuckConverter{
+12V -> 3.3V für ESP, RFC ohne gr0e Leistungsverluste
+}
+
+class Verbraucher{
+W_ESP_A = 0.1
+W_ESP_S = 0.033 * 1e-3
+
+W_RFID_A = 0.066 # [W]
+W_RFID_S = 0.033*1e-3 #[W]
+
+
+W_ESP_RFID_A = leistung_nach_bug_converter(W_ESP_A + W_RFID_A)
+W_ESP_RFID_S = leistung_nach_bug_converter(W_ESP_S + W_RFID_S)
+
+BEWEGUNGSSENSOR_A = 2*1e-3 * 12
+BEWEGUNGSSENSOR_S = 0.065*1e-3 * 12
+
+W_SOLAR_LADE_MODUL= 0.18 #[W] ca 15mA bei 12V
+
+W_LINEARAKTUATOR_A = 30 #[W]
+}
+
+@enduml
+
+"""
+H-Brücke sinnvoll bei Gleichstrommotoren, die in beide Richtungen drehen sollen (Linear Aktuator).
+(Ansonsten Transistor, MOSFET ausreichend)
+
+Bei induktiven Lasten (Motoren) benötigt man eine Freilaufdiode (1N4007)
+antiparallel zum Verbraucher, um beim abschalten entstehende Induktionsspannungen abzufangen.
+
+1: Solar-Akku-System
+Solarpanel -> Solar-Laderegler -> Akku
+
+Solar Laderegler:
+-Überladungsschutz: Ist Akku voll, schaltet der Regler den
+Ladestrom ab oder regelt ihn auf minimale Erhaltungsladung herunter.
+
+-Tiefentladungsschutz: Fällt Akkuspannung unter einen kritischen Wert, wird der
+Verbraucher-Ausgang abgestellt, um Akku vor Zelltod zu retten.
+
+-Rückstromschutz:
+Strom aus Akku könnte auf Solar Pannel fließen (Nachts).
+Dieser Rückstrom muss blockiert werden.
+
+Empfehlung:
+12V Blei-Gel-Akku zusätzlicher Solar-Laderegler.
+
+Solarladeregler auf "Gel" oder "SELED" stellen, um passende Ladespannung zu verwenden (kleiner als gewöhnlich)
+
+
+Akkuschonendes Herunterregulieren auf 3.3V für die ESP
+DC-Dc-Abwärtwandler (Buck Converter)
+
+Die akkuschonende Methode: DC-DC-Abwärtswandler (Buck Converter)Ein Buck Converter ist
+ein sogenannter Schaltregler. Er hackt die 12V-Eingangsspannung mithilfe eines elektronischen
+Schalters (MOSFET) in extrem schnelle Impulse (viele tausend Mal pro Sekunde) und glättet sie über e
+ine Spule und einen Kondensator wieder zu einer glatten Gleichspannung.Der Vorteil:
+Er wandelt die Energie fast verlustfrei um. Gute Buck-Converter haben einen Wirkungsgrad von 90% bis
+ 95%.Wie es Energie spart: Da die Leistung ($P = U \times I$) vor und nach dem Wandler
+ (abzüglich minimaler Verluste) gleich bleibt, passiert folgendes: Wenn die ESP bei 5V ca. 100 mA
+ benötigt, "transformiert" der Buck Converter dies so um, dass auf der 12V-Seite der Batterie nur
+ etwa 45 mA entnommen werden! Der Strombedarf an der Batterie halbiert sich also nahezu.Welchen
+ Wandler solltest du wählen?Wenn dein ESP-Board einen 5V-Eingang hat (z. B. "5V" oder "VIN" Pin):Kaufe
+dir einen kleinen, einstellbaren Buck-Converter (z. B. mit dem Chip LM2596 oder den noch kleineren
+MP1584). Du schließt die 12V der Batterie an "IN+" und "IN-" an, drehst an der kleinen Schraube
+(Potentiometer), bis am Ausgang ("OUT+") genau 5,0V anliegen, und verbindest das mit dem ESP.
+Das ESP-Board regelt die 5V intern hocheffizient für den Chip auf 3,3V herunter.Achte auf den
+Standby-Verbrauch (Quiescent Current):Wenn sich die ESP im Deep-Sleep (Tiefschlaf) befindet,
+verbraucht sie selbst fast nichts mehr (wenige Mikroampere). Allerdings verbraucht auch der Buck-Converter
+ einen winzigen Eigenstrom, nur weil er eingeschaltet ist. Für extrem optimierte Solarsysteme nutzt
+  man Wandler mit sehr geringem Eigenstrom (z. B. Bausteine mit dem HT7333 oder spezialisierte
+  "Low-IQ" Buck-Regler), damit im Tiefschlaf nachts kein Strom verschwendet wird. Für den Anfang reicht
+   ein Standard-MP1584-Modul aber völlig aus!
+
+
+Mitschrift Exkurs zum Akku-Solar-System:
+
+Schütze Schaltung vor Unzulänglichkeiten er echten Welt.
+
+Akku (Eimer voller Strom):
+Blei-Gel-Akkululator
+Spannungsquelle mit einem inneren Widerstand, dessen
+Chemie massive von der Temperatur abhängt.
+
+CC/CV-Ladeverfahren
+Constant Current / Constant Voltage Profil.
+Laden mit konstantem Strom (Bulk), bis definierte Spannung.
+Spannung wird nun exakt gehalten, Strom sinkt langsam ab.
+Ladeschlussspannung(Punkt ab dem Gel anfängt zu Gasen)
+sinkt, wenn Akku warm wird  (Laderegler brauch externen Temperaturfühler)
+
+Solarpannel (nicht lineare Stromquelle MPPT-Debatte)
+Leistungsanpassung (Impedance Matching):
+Prinzip der maximalen Leistungsübertragung -
+Quelle gibt meiste Leistung ab, wenn der Wiederstand exakt
+dem Innenwiderstand der Quelle entspricht.
+
+MPPT-Regler:
+inteligenter DC-DC-Wandler - Mikrocontroller misst ständig Strom
+und Spannung, berechnet die Leistung und passt die  Eingangsimpedanz
+so an, dass das Panel im perfekten Arbeitspunkt läuft.
+
+Empfehlung: 100W-Panel und einen MPPT-Laderegler
+
+schleichender Tod (Iq Ruhestrom der Komponneten z.B. Laderegler, ESP, Rfid Kartenleser)
+Esp muss in den deep sleep wenn nicht aktiv, da rfid Kartenleser schluckt zu viel
+Strom um permannent laufen zu lassen.
+Idee: AM312 oder SR505 Mini-PIR
+Deep-Sleep -> Sensor Erkennung -> Wake-up-Signal ->
+Hardware-Iterrupt -> Erwachen -> Aktion -> deep Sleep
+
+Hysterese -> nutze "Load"-Ausgang des Ladereglers für Verbraucher.
+
+
+
+"""

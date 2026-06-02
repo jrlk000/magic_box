@@ -1,73 +1,122 @@
 import machine
 import time
-from motion import BewegungsSensor
 #Momentane Packetstruktur muss für spätere Struktur
 #im DateienRegister der ESP32 verändert werden.
 #from BewegungsSensor.motion import BewegungsSensor
 #from rfid_reader import RFIDReader
-#from motor import MotorController
+from LinearAktuator.motor import LinearAktuator
 
 # ---- Konfiguration ----
-PIR_PIN = 25 # Muss ein RTC-fähiger Pin sein.
-INTERAKTIONSZEITRAUM = 5000
+    #RTC_PIN = 25  # Muss ein RTC-fähiger Pin sein.
+INTERAKTIONSZEITRAUM = 5000 #[ms]
+AUSFAHRZEIT = 0 # [ms]
+EINFAHRZEIT = 0 # [ms]
 
-pir_sensor = BewegungsSensor(PIR_PIN)
+#Stromüberwachung
+R_IS = 21
+L_IS = 19
 
-def go_to_deep_sleep()->None:
-    """
-    Beobachtung des PIR-Pins konfigurieren und
-    das Herunterfahren des Hauptsystems einleiten.
-    """
-    print("Bereite Deep Sleep vor...")
+# Ermögliche das Ansteuern
+R_EN = 22
+L_EN = 23
 
-    #Strate die  Beobachtung des übergebenen RTC-Pins aus der RTC-Domäne.
-    pir_sensor.ermögliche_aufwachen()
-    time.sleep(500)
+# Kontrolliere Richtung und Geschwindigkeit der Bewegung
+R_PWM = 25
+L_PWM = 26
 
-    print("ESP Deep Sleep eingeleitet.")
-    time.sleep(500)
+class Main():
 
-    #Fahre das Hauptsystem des ESP herunter.
-    #Code darunter wird nicht mehr ausgeführt.
-    machine.deepsleep()
+    def __init__(self):
+        """
+
+        """
+        self.motor = LinearAktuator(R_IS, L_IS, R_PWM, L_PWM, R_EN, L_EN)
+
+    def go_to_deep_sleep(self) -> None:
+        """
+        Beobachtung des PIR-Pins konfigurieren und
+        das Herunterfahren des Hauptsystems einleiten.
+        """
+        print("Bereite Deep Sleep vor...")
+
+        # Strate die  Beobachtung des übergebenen RTC-Pins aus der RTC-Domäne.
+        # pir_sensor.ermögliche_aufwachen()
+        time.sleep(500)
+
+        print("ESP Deep Sleep eingeleitet.")
+        time.sleep(500)
+
+        # Fahre das Hauptsystem des ESP herunter.
+        # Code darunter wird nicht mehr ausgeführt.
+        machine.deepsleep()
+
+    def motor_interaktion(self, vorwärts=True):
+        """
+        Ansteuerung des Motors.
+        Args
+        ----
+        bool: True wenn Vorwärts bewegung, False andernfalls.
+
+        Returns
+        -------
+        bool: Zustand unfd Geschwindigkeit wurde erfolgreich eingestellt.
+        """
+        zustand_eingestellt = self.motor.wechsle_aktuellen_zustand()
+        geschwindigkeit_eingestellt = self.motor.regle_geschwindigkeit(vorwärts)
+        return zustand_eingestellt & geschwindigkeit_eingestellt
+
+    def main(self):
+        # --- WICHTIGE NEUERUNG ---
+        # Wir halten das Skript für 3 Sekunden an!
+        # Das gibt deinem PC die Zeit, den COM-Port zu erkennen
+        # und den Seriellen Monitor zu öffnen, BEVOR der ESP wieder schlafen geht.
+        time.sleep(3)
+
+        cause = machine.reset_cause()
+
+        print("-----------------------------------")
+        print("SYSTEM GESTARTET!")
+        print(f"Gemeldeter Reset-Grund (Code): {cause}")
+        print(f"Erwarteter Code für Deep Sleep: {machine.DEEPSLEEP_RESET}")
+        print("-----------------------------------")
+
+        if cause == machine.DEEPSLEEP_RESET:
+            print("AUFGEWACHT: Trigger wurde erfolgreich ausgelöst!")
+        else:
+            print("ACHTUNG: Kaltstart oder falscher Code! Gehe in 2 Sekunden wieder schlafen.")
+            time.sleep(2)
+            self.go_to_deep_sleep()
+
+        start_time = time.ticks_ms()
+
+        #Aktuator fährt aus.
+        self.motor_interaktion(vorwärts=True)
+        time.sleep_ms(AUSFAHRZEIT)
+
+        while True:
+            """if pir_sensor.is_motion_detected():
+                start_time = time.ticks_ms()
+                print("Knopf gedrückt / Bewegung da, verlängere Wach-Zeit...")"""
+
+            # Zeitüberwachung
+            elapsed_time = time.ticks_diff(time.ticks_ms(), start_time)
+
+            #Aktuator fährt ein.
+            if elapsed_time > INTERAKTIONSZEITRAUM:
+                self.motor_interaktion(vorwätrs=False)
+
+                print("Interaktionszeitraum ist zu Ende.")
+                time.sleep(EINFAHRZEIT)
+
+                print("Timeout abgelaufen. Gehe wieder schlafen.")
+                self.go_to_deep_sleep()
+
+            time.sleep_ms(200)
 
 
-def main():
-    # --- WICHTIGE NEUERUNG ---
-    # Wir halten das Skript für 3 Sekunden an!
-    # Das gibt deinem PC die Zeit, den COM-Port zu erkennen
-    # und den Seriellen Monitor zu öffnen, BEVOR der ESP wieder schlafen geht.
-    time.sleep(3)
 
-    cause = machine.reset_cause()
 
-    print("-----------------------------------")
-    print("SYSTEM GESTARTET!")
-    print(f"Gemeldeter Reset-Grund (Code): {cause}")
-    print(f"Erwarteter Code für Deep Sleep: {machine.DEEPSLEEP_RESET}")
-    print("-----------------------------------")
 
-    if cause == machine.DEEPSLEEP_RESET:
-        print("AUFGEWACHT: Trigger wurde erfolgreich ausgelöst!")
-    else:
-        print("ACHTUNG: Kaltstart oder falscher Code! Gehe in 2 Sekunden wieder schlafen.")
-        time.sleep(2)
-        go_to_deep_sleep()
-
-    start_time = time.ticks_ms()
-
-    while True:
-        if pir_sensor.is_motion_detected():
-            start_time = time.ticks_ms()
-            print("Knopf gedrückt / Bewegung da, verlängere Wach-Zeit...")
-
-        elapsed_time = time.ticks_diff(time.ticks_ms(), start_time)
-
-        if elapsed_time > INTERAKTIONSZEITRAUM:
-            print("Timeout abgelaufen. Gehe wieder schlafen.")
-            go_to_deep_sleep()
-
-        time.sleep_ms(200)
 
 """def main():
     # ---- Aufwachen zuordnen ---

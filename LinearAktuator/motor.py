@@ -10,9 +10,9 @@ Enable: Hauptschalter für die H-Brücke -> beide EN_pins müssen auf HIHG sein,
  Aufteilung: Motortreiber Chip, kleiner Logik-Chip
  Mikrochip besitzt an jedem einzelnen Daten-Pin interne ESD-Schutzdioden.
 """
-"""
-verbindung zwischen Treiber und der ESP zum Steuern des Aktuators
 
+"""
+motor Treiber als verbindung zwischen der ESP und dem Aktuator.
 """
 
 import time
@@ -53,11 +53,37 @@ class LinearAktuator:
             time.sleep(0.1)
 
     def __init__(self, r_adc_num: int, l_adc_num: int, r_pwm_num: int, l_pwm_num: int, r_en_num: int, l_en_num: int) -> None:
-        #Stromüberwachung/Strommesser (Strom von Battery duch Motor)
-        #mit Mapping von 1:8500 zwischen Motorstrom und gemessenen Strom,
-        # Messung erfolgt über Spannungsverlust über Widerstand
+        """
+
+        Args
+        ----
+        IS-Pins (Strommessung):
+        Benötigen R-IS und L-IS: Motor dreht vorwärts, der Strom fließt durch den oberen Schalter der
+        rechten Halbbrücke in den Motor hinein und links gegegn GND. Nur der rechte Chip kann den Strom messen.
+        Motor dreht rückwärts, ist es genau umekehrt.
+        Da der Strom durch den Treibe rsehr hoch passiert ein  Mapping von 8500:1 zwischen Motorstrom und gemessenen Strom.
+
+        adc_r: Strommessung, wenn Fluss von rechts nach links (Vorwärts)
+        adc_l: Strommessung, wenn Fluss von links nach rechts (Rückwärts)
+
+        Steuern der Drehrichtung über die PWMs:
+        Vorwärts: PWM signal mit def. duty cycle auf R_PWM und L_PWM wird auf LOW gehalten
+        Effekt: Rechte Seite des Motors wird i mTakt des PWM-Signals mit Vcc verbunden, während die linke Seite fest mitGND verbunden bleibt.
+        Stromfluss von rechts nach links.
+
+        Rückwärts: PWM-Signal auf L_PWM und R_PWM auf permanent low.
+        Effekt: Linke Seite wird im Takt des PWM Signals mit Vcc verbunden während die rechte Seite fest an GND liegt.
+        Stromfluss von links nach rechts
+
+        l_pwm: Steuert linke Hälfte der H-Brücke
+        r_pwm_: Steuert rechte Hälfte der H-Brücke
+
+        en: Aktivierung der Brücke durch das Setzen auf High.
+        """
+
         try:
-            self.adcs = [ADC(Pin(r_adc_num)), ADC(Pin(l_adc_num))]
+            # ADCs
+            self.adcs = [ADC(Pin(l_adc_num)), ADC(Pin(r_adc_num))]
             for adc in self.adcs:
                 try:
                     adc.block().init(bits=12)  # map analog signal to {1, ..., 2**12}
@@ -65,16 +91,15 @@ class LinearAktuator:
                     pass
                 adc.init(atten=ADC.ATTN_11_DB)  # allows an intervall from to [0, 3.3] [V]
 
-            # Ermöglicht das Ansteuern
-            self.pwms = [PWM(Pin(r_pwm_num)), PWM(Pin(l_pwm_num))]
+            # PWMs
+            self.pwms = [PWM(Pin(l_pwm_num)), PWM(Pin(r_pwm_num))]
             for pwm in self.pwms:
                 pwm.freq(2000)
                 pwm.duty(0)
 
-            # Kontrolliere Richtung und Geschwindigkeit der Bewegung
-            self.ens = [Pin(r_en_num, Pin.OUT, value=0, pull=Pin.PULL_DOWN),
-                        Pin(l_en_num, Pin.OUT, value=0, pull=Pin.PULL_DOWN)
-                        ]
+            # Enables
+            self.ens = [Pin(l_en_num, Pin.OUT, value=0, pull=Pin.PULL_DOWN),
+                        Pin(r_en_num, Pin.OUT, value=0, pull=Pin.PULL_DOWN)]
             print("Aktuator erfolgreich initialisiert.")
 
         except ValueError as e:
@@ -87,47 +112,53 @@ class LinearAktuator:
             print("Versuche Neustart in 5 Sekunden...")
             time.sleep(5)
             machine.reset()  # Führt einen Hard-Reset des Mikrocontrollers aus
+        return None
 
-    """was muss gemacht werden, wann muss es gemaht werden und welche abfolgen gibt es."""
-
-    """
-    1) Treiber muss enablet werden, um steuerung per pwm zu machen 
-    2) Motor kann mit verschieden geschwindigkeiten basierend auf dem Duty Cycle gesteuert, werden
-    also Konfiguration des duty cycles, hochfahren, runterfahren
-    
-    Frage: 
-    Wie mit try, except böcken etc auf hardware probleme reagieren?
-    """
-
-    def wechsele_aktuellen_zustand(self)-> None:
+    def wechsele_aktuellen_zustand(self)->bool:
         """
-        Ermögliche die Ansteuerung des Motors über den Treiber durch die ESP32.
+        Ermögliche die Ansteuerung des Motors ber den Treiber durch die ESP32.
+
+        Return
+        ------
+        bool: Ansteuerung ermöglicht oder nicht.
         """
         for en in self.ens:
             en.value(not en.value())
 
         zustand = "ermöglicht" if self.ens[0].value() else "deaktiviert"
         print(f"Treiber Ansteuerung {zustand}!")
-        return None
+        return bool(en.value())
 
-    def regle_geschwindigkeit(self,dc=2**10/4, frequency=2*1e3):
+    def regle_geschwindigkeit(self,dc=2**10/4, frequency=2*1e3, vorwärts=True):
         """
         Regle die Geschwindigkeit des Aktuators über ein mapping durch PWM signale
         mit 10-bit resolution.
 
+        Vorwärts:
+        r_pwm: PWM-Signal
+        l_pwm: Low
+
+        Rückwärts:
+        r_pwm: Low
+        l_pwm: PWM-Signal
+
         Params
         ------
         duty_cycle : Setze HIGH-Anteil innerhalb Signal Periode [0, 2**10]
-        frequenze : PWm Frequenze - Wechsel zwischen High, Low pro Sekunde [1000, 4000] [Hz]
+        frequency : PWm Frequenze - Wechsel zwischen High, Low pro Sekunde [1000, 4000] [Hz]
         """
+        i = int(vorwärts)
+        j = i - 1
         try:
             #Clamping, um ValueErrors zu verhindern.
             dc = int(max(0, min(1023, dc)))
             frequency = max(1, frequency)
 
-            for pwm in self.pwms:
-                pwm.freq(frequency)
-                pwm.duty(dc)
+            pwm = self.pwms[i]
+            pwm.freq(frequency)
+            pwm.duty(dc)
+
+            pwm[j].duty(0)
 
         except ValueError as e:
             print(f"[WARNUNG]: Ungültige PWM Parameter: {e}")
@@ -135,26 +166,55 @@ class LinearAktuator:
             for pwm in self.pwms:
                 pwm.duty(0)
 
-    def motor_strom_monitoring(self):
+    def motor_strom_monitoring(self, vorwärts=True):
         """
         Hier kann gut die Logik für Probleme in der Motor Bestromung gefunden werden
         und darauf hin das system lahmgelegt werden.
         :return:
         """
-        spannungen = list()
+        idx = int(vorwärts)
+        #spannungen = list()
 
         try:
-
-            for adc in self.adcs:
-                spannung = (adc.read_u16() / 2**16) * 3.3
-                spannungen.append(spannung) # [V]
-            print(f"Motor Spannungsabfall: {spannungen[0]:.2f} V, {spannungen[-1]:-2f} V")
-            return spannungen
+            adc = self.adcs[idx]
+            spannung = (adc.read_u16() / 2**16) * 3.3
+            #spannungen.append(spannung) # [V]
+            print(f"Motor Spannungsabfall: {spannung}:.2f")
+            return spannung
         except Exception as e:
             print(f"Fehler beim Lesen des Stromsensors: {e}")
             return [0.0, 0.0]
 
-        print(f"Durch Motor Strom abgefangene Spannungen: {spannungen[0]}, {spannungen[-1]} [V]")
+        #print(f"Durch Motor Strom abgefangene Spannungen: {spannungen[0]}, {spannungen[-1]} [V]")Hauptschleife der Ansteuerung:
+        """
+                finally:
+            # Deinitialisiere verwndete ADCs und PWMs, schalte die Ansteuerung aus. 
+            print("Sicherheits-Abschaltung: Deinitialisiere PWMs...")
+            
+            #PWMs
+            for pwm in self.pwms:
+                try:
+                    pwm.duty(0)  # hihg pegel des signals innerhalb Periode auf 0 setzen
+                    pwm.deinit()  # Schaltet die Hardware-PWM-Generierung komplett ab
+                except:
+                    pass
+            
+            #Enables
+            for en in self.ens:
+                try:
+                    en.value(0)
+                except:
+                    pass
+            
+            #ADCs
+            for adc in self.adcs:
+                try:
+                    adc.deinit()
+                except:
+                    pass
+        """
+
+
 
 
 

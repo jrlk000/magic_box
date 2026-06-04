@@ -32,6 +32,23 @@ class Empfänger:
         return mac_string
 
     def lauschen(self):
+        mac, msg = self.esp_now.recv(timeout_ms=1000)
+        daten = None
+
+        if  not msg:
+            return None
+
+        try:
+            text = msg.decode('utf-8')
+            return json.loads(text)
+        except (ValueError, TypeError) as e:
+            print('Fehler bei decodieren des Signals.'
+                  f'Fehlermeldung: {e}')
+            return None
+
+
+
+    """def lauschen(self):
         while True:
             mac, msg = self.esp_now.recv(timeout_ms=500)
 
@@ -62,5 +79,5 @@ class Empfänger:
                         print("Motor läuft bereits. Signal ignoriert.")
 
                 else:
-                    print("Ignoriere redundantes Signal.")
+                    print("Ignoriere redundantes Signal.")"""
 

@@ -19,7 +19,7 @@ import time
 import machine
 from machine import Pin, PWM, ADC
 
-class LinearAktuator:
+class BTS7960Motor:
 
     # ---- Logik Pin Konfiguration ----
 
@@ -35,13 +35,16 @@ class LinearAktuator:
     RPWM = 25
     LPWM = 26"""
 
-    def error_mode(self, error_msg):
+    """def error_mode(self, error_msg):
         print(f"KRITISCHER FEHLER: {error_msg}")
 
         # 1. Alles sicher abschalten (Safe State)
         # z.B. pwms auf 0 setzen
         for pwm in self.pwms:
             pwm.deinit()
+
+        for adc in self.adcs:
+            adc.init(mode=machine.Pin.IN, pull=None)
 
         for en in self.ens:
             en.value(0)
@@ -50,7 +53,7 @@ class LinearAktuator:
         led = machine.Pin(2, machine.Pin.OUT)  # Interne blaue LED am ESP32
         while True:
             led.value(not led.value())
-            time.sleep(0.1)
+            time.sleep(0.1)"""
 
     def __init__(self, r_adc_num: int, l_adc_num: int, r_pwm_num: int, l_pwm_num: int, r_en_num: int, l_en_num: int) -> None:
         """
@@ -80,6 +83,8 @@ class LinearAktuator:
 
         en: Aktivierung der Brücke durch das Setzen auf High.
         """
+
+        self.spannungsschwelle = 100*3.3/2**16
 
         try:
             # ADCs
@@ -114,7 +119,7 @@ class LinearAktuator:
             machine.reset()  # Führt einen Hard-Reset des Mikrocontrollers aus
         return None
 
-    def wechsele_aktuellen_zustand(self)->bool:
+    def wechsele_aktuellen_zustand(self):
         """
         Ermögliche die Ansteuerung des Motors ber den Treiber durch die ESP32.
 
@@ -127,7 +132,7 @@ class LinearAktuator:
 
         zustand = "ermöglicht" if self.ens[0].value() else "deaktiviert"
         print(f"Treiber Ansteuerung {zustand}!")
-        return bool(en.value())
+        return None
 
     def regle_geschwindigkeit(self,dc=2**10/4, frequency=2*1e3, vorwärts=True):
         """
@@ -165,6 +170,7 @@ class LinearAktuator:
             #Sicherheits-Fallback: Motor stoppen!
             for pwm in self.pwms:
                 pwm.duty(0)
+        return None
 
     def motor_strom_monitoring(self, vorwärts=True):
         """
@@ -185,7 +191,47 @@ class LinearAktuator:
             print(f"Fehler beim Lesen des Stromsensors: {e}")
             return [0.0, 0.0]
 
+    def warte_auf_endanschlag(self):
+        """
+        Blockiert das Programm, solange Strom fließt.
+        Bricht ab, sobald die Endlage erreicht ist (Strom/Spannung sinkt).
+         """
+        print("Überwache Motorstrom...")
+        # Kurze Austastzeit (Blanking Time), damit der Motor überhaupt erst anlaufen kann
+        time.sleep_ms(200)
+
+        while True:
+            aktuelle_spannung = self.motor_strom_monitoring()
+
+            if aktuelle_spannung < self.spannungsschwelle:
+                print("-> Endlage detektiert.")
+                break
+
+            time.sleep_ms(50)  # CPU entlasten
+
         #print(f"Durch Motor Strom abgefangene Spannungen: {spannungen[0]}, {spannungen[-1]} [V]")Hauptschleife der Ansteuerung:
+
+        def stop_motor(self):
+
+            try:
+                for pwm in self.pwms:
+                    pwm.deinit()
+            except (OSError, AttributeError) as e:
+                print(f"KRITISCHER FEHLER: {e}")
+
+            try:
+                for adc in self.adcs:
+                    adc.init(mode=machine.Pin.IN, pull=None)
+            except Exception as e:
+                print(f"KRITISCHER FEHLER: {e}")
+
+            try:
+                for en in self.ens:
+                    en.value(0)
+            except(OSError, RuntimeError)as e:
+                print(f"KRITISCHER FEHLER: {e}")
+
+
         """
                 finally:
             # Deinitialisiere verwndete ADCs und PWMs, schalte die Ansteuerung aus. 

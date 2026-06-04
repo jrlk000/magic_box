@@ -3,8 +3,9 @@
 class Motor{
 +__init__(adcs, pwms, ens) -> None:
 +wechsele_aktuellen_zustand(self)-> None
-+regle_geschwindigkeit(self,dc=2**10/4, frequency=2*1e3, vorwärts=True)
-+motor_strom_monitoring(self, vorwärts=True)
++regle_geschwindigkeit(self,dc=2**10/4, frequency=2*1e3, vorwärts=True)->None
++motor_strom_monitoring(self, vorwärts=True)->list[float]
++warte_auf_endanschlag()
 }
 
 class Sender{
@@ -19,6 +20,11 @@ class Sender{
 -_verpacke_nachricht(self, aktion: str)
 }
 
+class Sender_main(){
++Sender
++run()
+}
+
 class Empfänger{
 +__init__()
 +sende_MAC()
@@ -27,15 +33,15 @@ class Empfänger{
 
 class Main{
 +motor : LinearAktuator
-+sender : Sender
+#sender : Sender
 +empfänger : Empfänger
 
-+go_to_deep_sleep()
++enter_deep_sleep()
++run_active_tasks(rtc, empfänger, motor)
 +motor_interaktion()
 +run()
 }
 
 Main *-- Motor
-Main *-- Sender
 Main *-- Empfänger
 @enduml

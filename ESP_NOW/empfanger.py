@@ -4,7 +4,7 @@ import espnow
 import json
 import time
 
-class Empfänger:
+class Empfanger:
 
     def __init__(self):
         # ---- WLAN einschalten ----
@@ -14,7 +14,7 @@ class Empfänger:
         self.wlan.disconnect()
 
         # ---- ESP-NOW aktivieren ----
-        self.esp_now = espnow.ESPNOW()
+        self.esp_now = espnow.ESPNow()
         self.esp_now.active(True)
         print("Empfänger bereit. Warte auf ESP-NOW Pakete...")
 
@@ -22,16 +22,18 @@ class Empfänger:
         self.cooldown_zeit = 2*1e3 #Sperrzeit für neue Signale [ms]
         self.letzter_befehl_zeitpunkt = 0
         self.motor_leuft = False
+        self.MAC = "08:b6:1f:6f:2e:e4"
 
     def sende_MAC(self):
         # MAC-Adresse auslesen und lesbar formatieren
         mac_bytes = self.wlan.config('mac')
         mac_string = ubinascii.hexlify(mac_bytes, ':').decode()
 
-        print("Die MAC-Adresse DIESES Boards lautet:", mac_string)
+        print("Die MAC-Adresse DIESES Boards lautet:", mac_string, mac_bytes)
         return mac_string
 
     def lauschen(self):
+        print("Warte auf ankommende Signale...")
         mac, msg = self.esp_now.recv(timeout_ms=1000)
         daten = None
 
@@ -40,6 +42,7 @@ class Empfänger:
 
         try:
             text = msg.decode('utf-8')
+            print("Erhaltene Nachricht", text)
             return json.loads(text)
         except (ValueError, TypeError) as e:
             print('Fehler bei decodieren des Signals.'

@@ -1,15 +1,15 @@
 import machine
 import time
+from motor import BTS7960Motor
 
-from ESP_NOW.Empfänger import Empfänger
+"""from ESP_NOW.Empfänger import Empfänger
 #Momentane Packetstruktur muss für spätere Struktur
 #im DateienRegister der ESP32 verändert werden.
 #from Zeit_Modul.motion import Zeit_Modul
-#from rfid_reader import RFIDReader
 from LinearAktuator.motor import BTS7960Motor
-from machine import esp32
+from machine import esp32"""
 
-from Zeit_Modul.ds3231 import DS3231
+#from Zeit_Modul.ds3231 import DS3231
 
 # ---- Konfiguration ----
 INTERAKTIONSZEITRAUM = 5000 #[ms]
@@ -18,8 +18,8 @@ EINFAHRZEIT = 0 # [ms]
 
 # ---- Motor Treiber ----
 #Stromüberwachung
-R_IS = 21
-L_IS = 19
+R_IS = 32
+L_IS = 33
 
 # Ermögliche das Ansteuern
 R_EN = 22
@@ -97,7 +97,7 @@ def run_active_tasks(rtc, empfänger, motor):
 
 
 
-def motor_interaktion(motor):
+def motor_interaktion(motor: BTS7960Motor):
     """
     Steuert gesamte Motor interaktion: Hochfahren und Runterfahren.
     Args
@@ -108,24 +108,26 @@ def motor_interaktion(motor):
     -------
     bool: Zustand unfd Geschwindigkeit wurde erfolgreich eingestellt.
     """
+    print("Motor interaktion statartet...")
     #Ermöliche die Motor Ansteuerung
-    motor.wechsle_aktuellen_zustand()
+    motor.wechsele_aktuellen_zustand()
 
     #Motor HOCHFAHREN.
     motor.regle_geschwindigkeit(vorwärts=True)
 
     #Warte Endzustand des Motors ab.
-    motor.warte_auf_endeinschlag()
+    motor.warte_auf_endanschlag()
 
     #Zeitrahmen für User-Interaktion abwarten (Best Practice MicroPython)
     print(f"Warte {INTERAKTIONSZEITRAUM / 1000} Sek. auf User-Interaktion...")
     start_zeit = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), start_zeit) < INTERAKTIONSZEITRAUM:
+        print(f"Verbleibende Zeit: {INTERAKTIONSZEITRAUM-time.ticks_diff(time.ticks_ms(), start_zeit)}")
         time.sleep_ms(50)
 
     motor.regle_geschwindigkeit(vorwärts=False)
 
-    motor.warte_auf_endeinschlag()
+    motor.warte_auf_endanschlag()
 
     motor.stop_motor()
 
@@ -153,12 +155,12 @@ def run():
         rtc = DS3231(i2c)
 
         #Erstelle ein BTS7960 Motor Treiber instanz
-        motor = BTS7960Motor(R_IS = 21,
-                             L_IS = 19,
-                             R_EN=22,
-                             L_EN = 23,
-                             R_PWM=25,
-                             L_PWM = 27)
+        motor = BTS7960Motor(R_IS,
+                             L_IS,
+                             R_PWM,
+                             L_PWM,
+                             R_EN,
+                             L_EN)
 
         # Zwingend das Alarm-Flag des letzten Aufwachens bereinigen
         rtc.clear_alarm()
@@ -179,6 +181,61 @@ def run():
     # Wenn die Aufgabe erledigt ist oder wir außerhalb des Fensters wach wurden:
     enter_deep_sleep(rtc, wake_pin)
 
+def run_motor_debug():
+    print("\n--- ESP32 Motor Debug gestartet ---")
+
+    # I2C Bus initiieren
+    #i2c = machine.I2C(0, scl=machine.Pin(PIN_SCL), sda=machine.Pin(PIN_SDA))
+
+    # Empfänger erstellen
+    #empfänger = Empfänger()
+    #empfänger.sende_MAC()  # einmaliges Senden der MAC-Addresse
+
+    # Aufwach-Pin initiieren (Pull-Up ist wichtig, da der SQW Pin auf LOW zieht)
+    #wake_pin = machine.Pin(PIN_WAKE, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
+
+    try:
+        # RTC Objekt erstellen
+        #rtc = DS3231(i2c)
+
+        # Erstelle ein BTS7960 Motor Treiber instanz
+        motor = BTS7960Motor(32,
+                             33,
+                             25,
+                             26,
+                             22,
+                             23)
+
+        message = input("Starte motor interaktion y/n:").strip().lower()
+
+        if message == "y":
+            motor_interaktion(motor)
+
+
+        print("Interaktion beendet!")
+
+        # Zwingend das Alarm-Flag des letzten Aufwachens bereinigen
+        #rtc.clear_alarm()
+
+        # Aktuelle Zeit ausgeben
+        #jahr, monat, tag, stunde, minute, sekunde = rtc.get_time()
+        #print(f"Systemzeit: {tag:02d}.{monat:02d}.{jahr} - {stunde:02d}:{minute:02d}:{sekunde:02d}")
+
+    except OSError as e:
+        print(f"Fehler bei der RTC-Initialisierung: {e}")
+        print("Gehe in 5 Minuten Sicherheits-Schlaf...")
+        machine.deepsleep(300000)  # 5 Minuten interner Schlaf als Notfall-Lösung
+
+    # Prüfen, ob wir uns gerade innerhalb des Fensters befinden
+    #if START_STUNDE <= stunde < END_STUNDE:
+
+
+    # Wenn die Aufgabe erledigt ist oder wir außerhalb des Fensters wach wurden:
+    #enter_deep_sleep(rtc, wake_pin)
+
+
+
+
 
 
 
@@ -187,9 +244,9 @@ def run():
 """class Main():
 
     def __init__(self):
-        """
+        
 
-        """
+    
         self.motor = LinearAktuator(R_IS, L_IS, R_PWM, L_PWM, R_EN, L_EN)
 
     
@@ -226,9 +283,9 @@ def run():
         time.sleep_ms(AUSFAHRZEIT)
 
         while True:
-            """if pir_sensor.is_motion_detected():
+            if pir_sensor.is_motion_detected():
                 start_time = time.ticks_ms()
-                print("Knopf gedrückt / Bewegung da, verlängere Wach-Zeit...")"""
+                print("Knopf gedrückt / Bewegung da, verlängere Wach-Zeit...")
 
             # Zeitüberwachung
             elapsed_time = time.ticks_diff(time.ticks_ms(), start_time)
@@ -299,4 +356,4 @@ Aufwecken durch Trigger : DEEP_SLEEP_RESET
 """
 
 if __name__ == "__main__":
-    main()
+    run_motor_debug()

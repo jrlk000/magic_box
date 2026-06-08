@@ -24,8 +24,8 @@ class BTS7960Motor:
     # ---- Logik Pin Konfiguration ----
 
     """#Stromüberwachung mit Mapping von 1:8500 zwischen Motorstrom und gemessenen Strom
-    R_IS = 21
-    L_IS = 19
+    R_IS = 32
+    L_IS = 33
 
     #Ermögliche dsa ansteuern
     R_EN = 22
@@ -86,6 +86,10 @@ class BTS7960Motor:
 
         self.spannungsschwelle = 100*3.3/2**16
 
+        self.adcs = []
+        self.pwms = []
+        self.ens = []
+
         try:
             # ADCs
             self.adcs = [ADC(Pin(l_adc_num)), ADC(Pin(r_adc_num))]
@@ -94,7 +98,7 @@ class BTS7960Motor:
                     adc.block().init(bits=12)  # map analog signal to {1, ..., 2**12}
                 except AttributeError:
                     pass
-                adc.init(atten=ADC.ATTN_11_DB)  # allows an intervall from to [0, 3.3] [V]
+                adc.init(atten=ADC.ATTN_11DB)  # allows an intervall from to [0, 3.3] [V]
 
             # PWMs
             self.pwms = [PWM(Pin(l_pwm_num)), PWM(Pin(r_pwm_num))]
@@ -108,12 +112,14 @@ class BTS7960Motor:
             print("Aktuator erfolgreich initialisiert.")
 
         except ValueError as e:
-            self.error_mode(f"Hardwarefehler: {e}, versuche Neustart in 5 Sekunden...")
-            print("Hardwarefehler, versuche Neustart in 5 Sekunden...")
+            #self.error_mode(f"Hardwarefehler: {e}, versuche Neustart in 5 Sekunden...")
+            self.stop_motor()
+            print("Hardwarefehler, Hardware wurde gestopt...Mikrocontroller reset...")
             time.sleep(5)
             machine.reset()  # Führt einen Hard-Reset des Mikrocontrollers aus
         except Exception as e:
-            self.error_mode(f"Unbekannter Hardware-Fehler bei Initialisierung: {e}")
+            print(f"Unbekannter Hardware-Fehler bei Initialisierung: {e}")
+            self.stop_motor()
             print("Versuche Neustart in 5 Sekunden...")
             time.sleep(5)
             machine.reset()  # Führt einen Hard-Reset des Mikrocontrollers aus
@@ -134,7 +140,7 @@ class BTS7960Motor:
         print(f"Treiber Ansteuerung {zustand}!")
         return None
 
-    def regle_geschwindigkeit(self,dc=2**10/4, frequency=2*1e3, vorwärts=True):
+    def regle_geschwindigkeit(self,dc=2**10, frequency=2*1e3, vorwärts=True):
         """
         Regle die Geschwindigkeit des Aktuators über ein mapping durch PWM signale
         mit 10-bit resolution.
@@ -157,13 +163,15 @@ class BTS7960Motor:
         try:
             #Clamping, um ValueErrors zu verhindern.
             dc = int(max(0, min(1023, dc)))
-            frequency = max(1, frequency)
+            frequency = int(max(1, frequency))
 
+            #High PWM side
             pwm = self.pwms[i]
             pwm.freq(frequency)
             pwm.duty(dc)
 
-            pwm[j].duty(0)
+            #Low PWM side
+            self.pwms[j].duty(0)
 
         except ValueError as e:
             print(f"[WARNUNG]: Ungültige PWM Parameter: {e}")
@@ -185,7 +193,7 @@ class BTS7960Motor:
             adc = self.adcs[idx]
             spannung = (adc.read_u16() / 2**16) * 3.3
             #spannungen.append(spannung) # [V]
-            print(f"Motor Spannungsabfall: {spannung}:.2f")
+            print(f"Motor Spannungsabfall: {spannung:.2f}")
             return spannung
         except Exception as e:
             print(f"Fehler beim Lesen des Stromsensors: {e}")
@@ -198,7 +206,7 @@ class BTS7960Motor:
          """
         print("Überwache Motorstrom...")
         # Kurze Austastzeit (Blanking Time), damit der Motor überhaupt erst anlaufen kann
-        time.sleep_ms(200)
+        time.sleep_ms(500)
 
         while True:
             aktuelle_spannung = self.motor_strom_monitoring()
@@ -211,25 +219,25 @@ class BTS7960Motor:
 
         #print(f"Durch Motor Strom abgefangene Spannungen: {spannungen[0]}, {spannungen[-1]} [V]")Hauptschleife der Ansteuerung:
 
-        def stop_motor(self):
+    def stop_motor(self):
 
-            try:
-                for pwm in self.pwms:
-                    pwm.deinit()
-            except (OSError, AttributeError) as e:
-                print(f"KRITISCHER FEHLER: {e}")
+        try:
+            for adc in self.adcs:
+                adc.deinit()
+        except Exception as e:
+            print(f"KRITISCHER FEHLER: {e}")
 
-            try:
-                for adc in self.adcs:
-                    adc.init(mode=machine.Pin.IN, pull=None)
-            except Exception as e:
-                print(f"KRITISCHER FEHLER: {e}")
+        try:
+            for pwm in self.pwms:
+                pwm.deinit()
+        except (OSError, AttributeError) as e:
+            print(f"KRITISCHER FEHLER: {e}")
 
-            try:
-                for en in self.ens:
-                    en.value(0)
-            except(OSError, RuntimeError)as e:
-                print(f"KRITISCHER FEHLER: {e}")
+        try:
+            for en in self.ens:
+                en.value(0)
+        except(OSError, RuntimeError)as e:
+            print(f"KRITISCHER FEHLER: {e}")
 
 
         """

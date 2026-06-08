@@ -6,28 +6,24 @@ next_to_do
 }
 
 object to_do{
-+Architektur 2 erstellen mit besprochenen Änderungen
-+RFID Technologie ausprobieren, präferierte alternative zu Esp-now
-+Öffnungsmechanismus mit Gasdruckfedern automatisieren
-+Holzkiste und Gasdruckfeder besorgen bei Obi
++Schaöltplan abändern
++Bewegungsmelder ausprobieren
++Aktuator an Prototyp dranschrauben
++Code für Bewegungsmelder, RFID, ESP Interaktion schreiben
 }
 
 object stores{
 BerryBase
 Fundoino
 Otronic
+Amazon
 }
 
 object shopping_list_private{
 Platinenhalter
-Lötschwamm (Metall)
 helfende Arme
-Platinen
-Kabel
-Lötzinn
+Kabel (ausgerechnet mit Querschnittsrechner)
 }
-
-
 
 magic_box *-- to_do
 magic_box *-- shopping_list_private

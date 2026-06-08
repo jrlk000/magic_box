@@ -28,14 +28,14 @@ class Sender:
     def wurde_pin_gedrückt(self):
         return self.start_pin.value()
 
-    def switsch_pin_zustand(self):
+    def switch_pin_zustand(self):
         self.start_pin.value(not self.start_pin.value)
 
     def _ermögliche_aufwachen(self)->None:
         esp32.wake_on_ext0(pin=self.start_pin, level=esp32.WAKEUP_ANY_HIGH)
         print(f"Wake-Up Triger durch RCT-Pin initialisiert.")
 
-    def gehe_schlafen(self)->None:
+    def _gehe_schlafen(self)->None:
         #Starte Überwachung des RTC Pins
         self._ermögliche_schlafen()
         time.sleep(500)
@@ -46,15 +46,15 @@ class Sender:
         #herunterfahren des Hauptsystems, Code drunter wird nicht mehr ausgeführt
         machine.deepsleep()
 
-    def aktiviere_antenne(self):
+    def _aktiviere_antenne(self):
         self.wlan.active(True)
         self.wlan.disconnect()
 
-    def aktiviere_esp_now(self):
+    def _aktiviere_esp_now(self):
         self.esp_now.active(True)
         self.esp_now.add_peer(self.ziel_mac)
 
-    def verpacke_nachricht(self, aktion: str):
+    def _verpacke_nachricht(self, aktion: str):
         daten = {"aktion" : aktion} # Befehl muss 'motor_starten' sein.
         msg_bytes = json.dumps(daten).encode('utf-8')
         return msg_bytes
@@ -64,9 +64,9 @@ class Sender:
         grund = machine.reset_cause()
 
         if grund == machine.DEEPSLEEP_RESET:
-            self.aktiviere_antenne()
-            self.aktiviere_esp_now()
-            msg_bytes = self.verpacke_nachricht()
+            self._aktiviere_antenne()
+            self._aktiviere_esp_now()
+            msg_bytes = self._verpacke_nachricht()
 
             #SEnde Nachricht
             erfolg = self.esp_now.send(self.ziel_mac, msg_bytes)
@@ -79,7 +79,7 @@ class Sender:
             time.sleep_ms(100)
 
             #RTC-Pin konfiguration als Weckruf enthalten.
-            self.gehe_schlafen()
+            self._gehe_schlafen()
         else:
             print("ACHTUNG: Kaltstart oder falscher Code! Gehe in 2 Sekunden wieder schlafen.")
             time.sleep(2)

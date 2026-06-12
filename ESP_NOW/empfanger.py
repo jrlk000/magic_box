@@ -2,27 +2,53 @@ import network
 import ubinascii
 import espnow
 import json
-import time
+import errno
 
 class Empfanger:
 
     def __init__(self):
-        # ---- WLAN einschalten ----
-        self.wlan = network.WLAN(network.STA_IF)
-        self.wlan.active(True)
-        #mögliche Verbindungen trennen
-        self.wlan.disconnect()
+        try:
+            # 1. AP-Modus sicherheitshalber ausschalten
+            wlan_ap = network.WLAN(network.AP_IF)
+            wlan_ap.active(False)
 
-        # ---- ESP-NOW aktivieren ----
-        self.esp_now = espnow.ESPNow()
-        self.esp_now.active(True)
-        print("Empfänger bereit. Warte auf ESP-NOW Pakete...")
+            # 2. Station-Modus aktivieren
+            wlan_sta = network.WLAN(network.STA_IF)
+            wlan_sta.active(True)
+            wlan_sta.disconnect()  # Trennen von evtl. alten Router-Verbindungen
+
+            # 3. ESP-NOW starten
+            self.esp_now = espnow.ESPNow()
+            self.esp_now.active(True)
+
+        except OSError as e:
+            print(f"Fehler bei Initialisiereung des Senders {e}.")
+            self.deinit_empfänger()
 
         # ---- Cooldown-Variablen ----
         self.cooldown_zeit = 2*1e3 #Sperrzeit für neue Signale [ms]
         self.letzter_befehl_zeitpunkt = 0
         self.motor_leuft = False
-        self.MAC = "08:b6:1f:6f:2e:e4"
+        self.mac = "08:b6:1f:6f:2e:e4"
+
+    def deinit_empfänger(self):
+        try:
+            #Deaktivierung
+
+            # ----Wlan----
+            wlan_sta = network.WLAN(network.STA_IF)
+            wlan_sta.active(False)
+
+            wlan_ap = network.WLAN(network.AP_IF)
+            wlan_ap.active(False)
+
+            # ----Esp-now----
+            self.esp_now.active(False)
+
+            print("Sender heruntergefahren...")
+
+        except Exception as e:
+            print(f"Fehler beim Deinitialisieren des Senders: {e}")
 
     def sende_MAC(self):
         # MAC-Adresse auslesen und lesbar formatieren
@@ -32,21 +58,38 @@ class Empfanger:
         print("Die MAC-Adresse DIESES Boards lautet:", mac_string, mac_bytes)
         return mac_string
 
-    def lauschen(self):
+    def lauschen(self)->str|None:
         print("Warte auf ankommende Signale...")
-        mac, msg = self.esp_now.recv(timeout_ms=1000)
-        daten = None
 
-        if  not msg:
+        try:
+            mac, msg = self.esp_now.recv(timeout_ms=1000)
+
+        except OSError as ex:
+            err_code = ex.arg[0]
+
+            if err_code == errno.ETIMEDOUT:
+                #Keine Daten im Puffer
+                print("Keine Pakete in der Nähe...")
+                pass
+
+            elif err_code == errno.ECONNRESET:
+                print("[WARNUNG]: ESP-NOW Empfangspuffer voll (Datenverlust)!")
+
+            else:
+                print(f"Kritischer Fehler beim Empangen von daten: {ex}")
+                self.deinit_empfänger()
+
+        if not msg:
             return None
 
         try:
             text = msg.decode('utf-8')
             print("Erhaltene Nachricht", text)
             return json.loads(text)
-        except (ValueError, TypeError) as e:
+
+        except (ValueError, TypeError) as ex:
             print('Fehler bei decodieren des Signals.'
-                  f'Fehlermeldung: {e}')
+                  f'Fehlermeldung: {ex}')
             return None
 
 

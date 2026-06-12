@@ -4,21 +4,81 @@ Main loop für die sender devices.
 
 import machine
 import time
+import esp32
+from machine import Pin, ADC
 from sender import Sender
-aufwach_pin_num = 3
-led_pin_num = 4
+
+MSG = "Motor"
+WAKE_PIN = Pin(3, Pin.IN, Pin.PULL_DOWN)
+SENDE_ZEIT = 20*1e3
+#led_pin_num = 4
+
+# ---- Messungen ----
+"""adc =  ADC(WAKE_PIN)
+adc.atten(adc.ATTN_11DB)
+
+OBERESPANNUNGSGRENZE = 2.7-3.3 # [V]
+UNTERESPANNUNGSGRENZE = 0-0.1 # [V]"""
+
 
 try:
+
+    time.sleep_ms(2000)
+    """print("Aufgewacht...")
+    grund = machine.reset_cause()
+
+    if grund == machine.DEEPSLEEP_RESET:
+        print("Board ist nach ablauf der deep sleep zeit erwacht.")
+
+    elif grund == machine.PIN_WAKE:
+        print("Board ist durch RTC trigger aus dem schlaf geholt worden.")
+
+    else:
+        print("Unrelevanter Aufwachgrund.")"""
+
+    # ---- Sender Initialisierung ----
     print("Initialisiere Sender...")
     sender = Sender()
 
-    start = time.ticks_ms()
+    #Messungen
+    """while True:
+        u_sum = 0
+        v_sum = 0
+        for _ in range(100):
+            u_sum += adc.read_u16()
+            v_sum += adc.read_uv()
 
-    while time.ticks_diff(time.ticks_ms(), start) < 45*1e3:
-        sender.kontaktiere_empfänger_debug()
+        print(f"Anliegende Spannung ...u_16:{u_sum/100 *3.3/2**16} [V]")
+        print(f"Spannung ...uv: {v_sum/100 * 1e-6 :.3f} [V]")
+
+        time.sleep_ms(2000)"""
+
+
+    #----Senden ----
+    start = time.ticks_ms()
+    while time.ticks_diff(time.ticks_ms(), start) < SENDE_ZEIT:
+        sender.kontaktiere_empfänger_debug(MSG)
+        print(f"Verbleibende Zeit {(SENDE_ZEIT - time.ticks_diff(time.ticks_ms(), start))/1000:.2f}")
         time.sleep_ms(50)
 
     sender.deinit_sender()
+
+    print("Initialisiere Trigger-Pin")
+    esp32.wake_on_gpio([WAKE_PIN], esp32.WAKEUP_ANY_HIGH)
+    #WAKE_PIN.irq(trigger=machine.Pin.IRQ_RISING)
+
+    time.sleep_ms(1000)
+
+    #start = time.ticks_ms()
+    #machine.lightsleep()
+    machine.deepsleep()
+
+    # [Hinweis]: nach dem aufwachen aus dem Deep Sleep wird neu gebootet, somit wird auch diese file von Vorne abgespielt.
+
+
+
+
+
 
 
     #led = machine.Pin(led_pin_num, machine.Pin.OUT, value=1)
@@ -54,7 +114,7 @@ try:
     # 1. Board schlafen legen für definierte Zeit
     #machine.deepsleep([5e3])  # Zeit in ms
 
-    print("Konfiguriere WakeUp-Pin...")
+    #print("Konfiguriere WakeUp-Pin...")
     # 2. Board schlafen legen und trigger initialisieren
     #trigger.irq(trigger=machine.Pin.IRQ_FALLING, wake=machine.DEEPSLEEP)
 

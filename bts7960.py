@@ -84,7 +84,9 @@ class BTS7960Motor:
         en: Aktivierung der Brücke durch das Setzen auf High.
         """
 
-        self.spannungsschwelle = 100*3.3/2**16
+        #self.spannungsschwelle = 100*3.3/2**16
+        self.spannungsschwelle = 0.125885009765625
+        self.blanking_time = 500
 
         self.adcs = []
         self.pwms = []
@@ -104,7 +106,7 @@ class BTS7960Motor:
             self.pwms = [PWM(Pin(l_pwm_num)), PWM(Pin(r_pwm_num))]
             for pwm in self.pwms:
                 pwm.freq(2000)
-                pwm.duty(0)
+                pwm.duty_u16(0)
 
             # Enables
             self.ens = [Pin(l_en_num, Pin.OUT, value=0, pull=Pin.PULL_DOWN),
@@ -125,22 +127,32 @@ class BTS7960Motor:
             machine.reset()  # Führt einen Hard-Reset des Mikrocontrollers aus
         return None
 
-    def wechsele_aktuellen_zustand(self):
-        """
+    """def wechsele_aktuellen_zustand(self):
+        
         Ermögliche die Ansteuerung des Motors ber den Treiber durch die ESP32.
 
         Return
         ------
         bool: Ansteuerung ermöglicht oder nicht.
-        """
+        
         for en in self.ens:
             en.value(not en.value())
 
         zustand = "ermöglicht" if self.ens[0].value() else "deaktiviert"
         print(f"Treiber Ansteuerung {zustand}!")
-        return None
+        return None"""
 
-    def regle_geschwindigkeit(self,dc=2**10, frequency=2*1e3, vorwärts=True):
+    def aktiviere_treiber(self):
+        for en in self.ens:
+            en.value(1)  # Explizit AN
+        print("Treiber Ansteuerung ermöglicht!")
+
+    def deaktiviere_treiber(self):
+        for en in self.ens:
+            en.value(0)  # Explizit AUS
+        print("Treiber deaktiviert!")
+
+    def regle_geschwindigkeit(self,dc=2**10 - 1, frequency=2*1e3, vorwärts=True):
         """
         Regle die Geschwindigkeit des Aktuators über ein mapping durch PWM signale
         mit 10-bit resolution.
@@ -158,20 +170,23 @@ class BTS7960Motor:
         duty_cycle : Setze HIGH-Anteil innerhalb Signal Periode [0, 2**10]
         frequency : PWm Frequenze - Wechsel zwischen High, Low pro Sekunde [1000, 4000] [Hz]
         """
+        print("In regle_geschwindigkeit...")
         i = int(vorwärts)
         j = i - 1
         try:
             #Clamping, um ValueErrors zu verhindern.
-            dc = int(max(0, min(1023, dc)))
-            frequency = int(max(1, frequency))
+            dc = int(max(0, min(2**16 -1, dc)))
+            #frequency = int(max(1, frequency))
 
             #High PWM side
             pwm = self.pwms[i]
             pwm.freq(frequency)
-            pwm.duty(dc)
+            pwm.duty_u16(dc)
 
             #Low PWM side
             self.pwms[j].duty(0)
+
+            print("Motor erfolgreich hochgefahren.")
 
         except ValueError as e:
             print(f"[WARNUNG]: Ungültige PWM Parameter: {e}")
@@ -206,7 +221,7 @@ class BTS7960Motor:
          """
         print("Überwache Motorstrom...")
         # Kurze Austastzeit (Blanking Time), damit der Motor überhaupt erst anlaufen kann
-        time.sleep_ms(500)
+        time.sleep_ms(self.blanking_time)
 
         while True:
             aktuelle_spannung = self.motor_strom_monitoring()
@@ -229,6 +244,7 @@ class BTS7960Motor:
 
         try:
             for pwm in self.pwms:
+                pwm.duty_u16(0)
                 pwm.deinit()
         except (OSError, AttributeError) as e:
             print(f"KRITISCHER FEHLER: {e}")

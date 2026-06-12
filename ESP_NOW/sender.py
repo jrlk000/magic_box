@@ -20,58 +20,116 @@ class Sender:
         self.ziel_mac =  b'\x08\xb6\x1fo.\xe4'
 
         # ---- Antene / ESPNOW ----
-        # 1. AP-Modus sicherheitshalber ausschalten (verhindert Konflikte)
-        wlan_ap = network.WLAN(network.AP_IF)
-        wlan_ap.active(False)
 
-        # 2. Station-Modus aktivieren (Pflicht für normales ESP-NOW)
-        wlan_sta = network.WLAN(network.STA_IF)
-        wlan_sta.active(True)
-        wlan_sta.disconnect()  # Trennen von evtl. alten Router-Verbindungen
+        try:
+            # 1. AP-Modus sicherheitshalber ausschalten
+            wlan_ap = network.WLAN(network.AP_IF)
+            wlan_ap.active(False)
 
-        # 3. ESP-NOW starten
-        self.esp_now = espnow.ESPNow()
-        self.esp_now.active(True)
-        """self.wlan = network.WLAN(network.STA_IF)
+            # 2. Station-Modus aktivieren
+            wlan_sta = network.WLAN(network.STA_IF)
+            wlan_sta.active(True)
+            wlan_sta.disconnect()  # Trennen von evtl. alten Router-Verbindungen
 
-        self.esp_now = espnow.ESPNow()
-        self.esp_now.active(True)"""
-        print("Sender wurde konfiguriert.")
+            # 3. ESP-NOW starten
+            self.esp_now = espnow.ESPNow()
+            self.esp_now.active(True)
 
-    """def wurde_pin_gedrückt(self):
-        return self.start_pin.value()
+        except OSError as e:
+            print(f"Fehler bei Initialisiereung des Senders {e}.")
+            self.deinit_sender()
 
-    def switch_pin_zustand(self):
-        self.start_pin.value(not self.start_pin.value)
+    def deinit_sender(self):
+        try:
+            #Deaktivierung
 
-    def _ermögliche_aufwachen(self)->None:
-        esp32.wake_on_ext0(pin=self.start_pin, level=esp32.WAKEUP_ANY_HIGH)
-        print(f"Wake-Up Triger durch RCT-Pin initialisiert.")
+            # ----Wlan----
+            wlan_sta = network.WLAN(network.STA_IF)
+            wlan_sta.active(False)
 
-    def _gehe_schlafen(self)->None:
-        #Starte Überwachung des RTC Pins
-        self._ermögliche_schlafen()
-        time.sleep(500)
+            wlan_ap = network.WLAN(network.AP_IF)
+            wlan_ap.active(False)
 
-        print("ESP deep sleep eingeleitet!")
-        time.sleep(500)
+            # ----Esp-now----
+            self.esp_now.active(False)
 
-        #herunterfahren des Hauptsystems, Code drunter wird nicht mehr ausgeführt
-        machine.deepsleep()"""
+            print("Sender heruntergefahren...")
 
-    def _aktiviere_antenne(self):
-        self.wlan.active(True)
-        self.wlan.disconnect()
+        except Exception as e:
+            print(f"Fehler beim Deinitialisieren des Senders: {e}")
 
-    def _aktiviere_esp_now(self):
-        self.esp_now.active(True)
-        #self.esp_now.add_peer(self.ziel_mac)
 
-    def _verpacke_nachricht(self, aktion: str):
-        daten = {"aktion" : aktion} # Befehl muss 'motor_starten' sein.
+
+    def _verpacke_nachricht(self, nachricht: str)->str|None:
+        """
+        Verschlüssele Nachricht in byte-code.
+        """
+        daten = {"nachricht" : nachricht}
         msg_bytes = json.dumps(daten).encode('utf-8')
+
+        if len(msg_bytes) > espnow.MAX_DATA_LEN:
+            print(f"Fehler: Daten zu groß ({len(msg_bytes)} Bytes).")
+            return None
+
         return msg_bytes
 
+    def kontaktiere_empfänger_debug(self, msg: str):
+        """
+        Sendet Daten. Falls der Peer fehlt, wird er automatisch hinzugefügt.
+        Fängt Längen- und Existenz-Fehler hardwarenah ab.
+        """
+        msg_bytes = self._verpacke_nachricht(msg)
+
+        try:
+            # 1. Sendeversuch
+            self.esp_now.send(self.ziel_mac, msg_bytes, True)
+            print("Erfolg: Nachricht wurde gesendet!")
+            return True
+
+        except OSError as err:
+            # err.args ist ein Tuple: (Fehlercode, Fehlermeldung)
+            if len(err.args) > 1 and err.args[1] == 'ESP_ERR_ESPNOW_NOT_FOUND':
+                print("Warnung: Peer war nicht registriert. Füge ihn jetzt hinzu...")
+
+                try:
+                    # Peer nachregistrieren
+                    self.esp_now.add_peer(self.ziel_mac)
+
+                    # 2. Sendeversuch
+                    self.esp_now.send(self.ziel_mac, msg_bytes, True)
+                    print("Erfolg: Nachricht im zweiten Anlauf gesendet!")
+                    return True
+
+                except OSError as add_err:
+                    print(f"Kritischer Fehler beim Nachregistrieren: {add_err}")
+                    self.deinit_sender()
+                    return False
+            else:
+                # Ein ganz anderer Hardware-Fehler (z.B. WLAN aus)
+                print(f"Allgemeiner Sende-Fehler: {err}")
+                self.deinit_sender()
+                return False
+
+    """def wurde_pin_gedrückt(self):
+                return self.start_pin.value()
+
+            def switch_pin_zustand(self):
+                self.start_pin.value(not self.start_pin.value)
+
+            def _ermögliche_aufwachen(self)->None:
+                esp32.wake_on_ext0(pin=self.start_pin, level=esp32.WAKEUP_ANY_HIGH)
+                print(f"Wake-Up Triger durch RCT-Pin initialisiert.")
+
+            def _gehe_schlafen(self)->None:
+                #Starte Überwachung des RTC Pins
+                self._ermögliche_schlafen()
+                time.sleep(500)
+
+                print("ESP deep sleep eingeleitet!")
+                time.sleep(500)
+
+                #herunterfahren des Hauptsystems, Code drunter wird nicht mehr ausgeführt
+                machine.deepsleep()"""
 
     """def kontaktiere_empfänger(self):
         grund = machine.reset_cause()
@@ -113,49 +171,3 @@ class Sender:
             print("Auftrag konnte an Empfänger nicht übermittelt werden.")
         return erfolg
 """
-    def kontaktiere_empfänger_debug(self):
-        """
-        Sendet Daten. Falls der Peer fehlt, wird er automatisch hinzugefügt.
-        Fängt Längen- und Existenz-Fehler hardwarenah ab.
-        """
-        # 1. Vorab-Check der Paketgröße (vom ersten Fehler gelernt)
-        """if len(data) > espnow.MAX_DATA_LEN:
-            print(f"Fehler: Daten zu groß ({len(data)} Bytes).")
-            return False"""
-
-        try:
-            # 2. Wir versuchen einfach zu senden
-            msg_bytes = self._verpacke_nachricht("Starte Interaktion")
-            self.esp_now.send(self.ziel_mac, msg_bytes, True)
-            print("Erfolg: Nachricht wurde gesendet und per ACK bestätigt!")
-            return True
-
-        except OSError as err:
-            # err.args ist ein Tuple: (Fehlercode, Fehlermeldung)
-            if len(err.args) > 1 and err.args[1] == 'ESP_ERR_ESPNOW_NOT_FOUND':
-                print("Warnung: Peer war nicht registriert. Füge ihn jetzt hinzu...")
-
-                try:
-                    # Peer nachregistrieren
-                    self.esp_now.add_peer(self.ziel_mac)
-
-                    # Zweiter Sendeversuch
-                    self.esp_now.send(self.ziel_mac, msg_bytes, True)
-                    print("Erfolg: Nachricht im zweiten Anlauf gesendet!")
-                    return True
-
-                except OSError as add_err:
-                    print(f"Kritischer Fehler beim Nachregistrieren: {add_err}")
-                    return False
-            else:
-                # Ein ganz anderer Hardware-Fehler (z.B. WLAN aus)
-                print(f"Allgemeiner Sende-Fehler: {err}")
-                return False
-
-    def deinit_sender(self):
-        try:
-            self.wlan.active(False)
-            self.esp_now.active(False)
-            print("Sender heruntergefahren...")
-        except Exception as e:
-            print(e)

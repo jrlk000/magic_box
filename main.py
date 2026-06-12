@@ -1,6 +1,10 @@
 import machine
+import esp32
 import time
-from motor import BTS7960Motor
+from bts7960 import BTS7960Motor
+from L289N import L289NMotor
+from ds3231 import DS3231
+from empfanger import Empfanger
 
 """from ESP_NOW.Empfänger import Empfänger
 #Momentane Packetstruktur muss für spätere Struktur
@@ -12,9 +16,9 @@ from machine import esp32"""
 #from Zeit_Modul.ds3231 import DS3231
 
 # ---- Konfiguration ----
-INTERAKTIONSZEITRAUM = 5000 #[ms]
-AUSFAHRZEIT = 0 # [ms]
-EINFAHRZEIT = 0 # [ms]
+INTERAKTIONS_ZEIT = 5000 #[ms]
+AUSFAHR_ZEIT = 5000 # [ms]
+EINFAHR_ZEIT = 5000 # [ms]
 
 # ---- Motor Treiber ----
 #Stromüberwachung
@@ -35,14 +39,14 @@ PIN_SDA = 26
 PIN_SCL = 27
 
 # Hardware-Interrupt Pin (verbunden mit SQW am DS3231)
-PIN_WAKE = 33
+WAKE_PIN = 33
 
 # Aktiv-Fenster Definition
-START_STUNDE = 12
-END_STUNDE = 16
+START_STUNDE = 0
+END_STUNDE = 2
 
 
-def enter_deep_sleep(rtc, wake_pin):
+def enter_deep_sleep(rtc):
     """Programmiert den RTC-Wecker und schickt den ESP schlafen."""
     print(f"Setze Wecker auf {START_STUNDE:02d}:00:00 Uhr...")
 
@@ -56,7 +60,9 @@ def enter_deep_sleep(rtc, wake_pin):
         # Fallback: Wenn RTC ausfällt, schlafe pauschal für 1 Stunde (interner Timer)
         machine.deepsleep(3600000)
 
-    print(f"Aktiviere Wake-Up an Pin {PIN_WAKE} (LOW-Signal erwartet).")
+    print(f"Aktiviere Wake-Up an Pin {WAKE_PIN} (LOW-Signal erwartet).")
+    # Aufwach-Pin initiieren (Pull-Up ist wichtig, da der SQW Pin auf LOW zieht)
+    wake_pin = machine.Pin(WAKE_PIN, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
     esp32.wake_on_ext0(pin=wake_pin, level=esp32.WAKEUP_ALL_LOW)
 
     print("Gehe in Deep Sleep. Gute Nacht!")
@@ -85,14 +91,21 @@ def run_active_tasks(rtc, empfänger, motor):
             print(">>> Aktivfenster beendet. Verlasse die Schleife.")
             break
 
-        # 3. Lauschen
+        while True:
+            msg = emfänger.lauschen()
+
+            if msg:
+                motor_interaktion(motor)
+                break
+
+        """# 3. Lauschen
         daten = empfänger.lauschen()
 
         # 4. Signal prüfen, Motor Interaktion starten
         if daten:
             print("Gültiges Signal erhalten. Starte Motor...")
             motor_interaktion(motor)
-            break
+            break"""
 
 
 
@@ -108,18 +121,36 @@ def motor_interaktion(motor: BTS7960Motor):
     -------
     bool: Zustand unfd Geschwindigkeit wurde erfolgreich eingestellt.
     """
-    print("Motor interaktion statartet...")
+    print("Motor interaktion statartet3...")
     #Ermöliche die Motor Ansteuerung
-    motor.wechsele_aktuellen_zustand()
+    #motor.wechsele_aktuely
+    # ylen_zustand()
+
+    #----MOTOR HOCHFAHREN----
+    motor.treiber_vorwärts()
 
     #Motor HOCHFAHREN.
-    motor.regle_geschwindigkeit(vorwärts=True)
 
-    #Warte Endzustand des Motors ab.
-    motor.warte_auf_endanschlag()
+    #----GESCHWINDIGKEIT REGULIEREN----
+    motor.regle_geschwindigkeit(dc=2**16 - 1, frequency=4000)
+
+
+    time.sleep_ms(AUSFAHR_ZEIT)
+
+    #----INTERAKTIONS-LOOP----
+    start = time.ticks_ms()
+    while time.ticks_diff(time.ticks_ms(), start) < INTERAKTIONS_ZEIT:
+        #motor.motor_strom_monitoring()
+        time.sleep_ms(500)
+
+    motor.treiber_rückwärts()
+    time.sleep_ms(EINFAHR_ZEIT)
+
+    motor.deinit_motor()
+    print("Motorinteraktion beendet...")
 
     #Zeitrahmen für User-Interaktion abwarten (Best Practice MicroPython)
-    print(f"Warte {INTERAKTIONSZEITRAUM / 1000} Sek. auf User-Interaktion...")
+    """print(f"Warte {INTERAKTIONSZEITRAUM / 1000} Sek. auf User-Interaktion...")
     start_zeit = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), start_zeit) < INTERAKTIONSZEITRAUM:
         print(f"Verbleibende Zeit: {INTERAKTIONSZEITRAUM-time.ticks_diff(time.ticks_ms(), start_zeit)}")
@@ -127,11 +158,13 @@ def motor_interaktion(motor: BTS7960Motor):
 
     motor.regle_geschwindigkeit(vorwärts=False)
 
+    time.sleep_ms(1000)
+
     motor.warte_auf_endanschlag()
 
     motor.stop_motor()
 
-    print("---- Motorinteraktion abgeschlossen. ----")
+    print("---- Motorinteraktion abgeschlossen. ----")"""
 
 
 
@@ -142,25 +175,17 @@ def run():
     # I2C Bus initiieren
     i2c = machine.I2C(0, scl=machine.Pin(PIN_SCL), sda=machine.Pin(PIN_SDA))
 
-    #Empfänger erstellen
-    empfänger = Empfänger()
-    empfänger.sende_MAC() #einmaliges Senden der MAC-Addresse
-
+    #Empfänger/Treiber erstellen
+    #empfänger = Empfänger()
+    #empfänger.sende_MAC() #einmaliges Senden der MAC-Addresse
 
     # Aufwach-Pin initiieren (Pull-Up ist wichtig, da der SQW Pin auf LOW zieht)
-    wake_pin = machine.Pin(PIN_WAKE, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
+    #wake_pin = machine.Pin(PIN_WAKE, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
 
     try:
-        # RTC Objekt erstellen
+        empfänger = Empfänger()
         rtc = DS3231(i2c)
-
-        #Erstelle ein BTS7960 Motor Treiber instanz
-        motor = BTS7960Motor(R_IS,
-                             L_IS,
-                             R_PWM,
-                             L_PWM,
-                             R_EN,
-                             L_EN)
+        motor = L289NMotor(23, 22, 26)
 
         # Zwingend das Alarm-Flag des letzten Aufwachens bereinigen
         rtc.clear_alarm()
@@ -179,7 +204,24 @@ def run():
         run_active_tasks(rtc, empfänger, motor)
 
     # Wenn die Aufgabe erledigt ist oder wir außerhalb des Fensters wach wurden:
-    enter_deep_sleep(rtc, wake_pin)
+    #enter_deep_sleep(rtc)
+
+
+    # --- 5. NÄCHSTEN ALARM BERECHNEN UND SETZEN ---
+    # Beispiel: Wir wollen in genau 5 Minuten wieder aufwachen.
+    # (Achtung: Dies ist eine simple Rechnung. Für ein echtes Projekt musst 
+    # du einen möglichen Stundenwechsel berechnen).
+    ziel_min = (minute + 1) % 60
+    ziel_std = stunde
+    if ziel_min < minute:
+        ziel_std = (stunde + 1) % 24
+
+    print(f"Setze nächsten Alarm auf {ziel_std:02d}:{ziel_min:02d}:00")
+    rtc.set_alarm(ziel_std, ziel_min, 0)
+
+    print(f"Setze nächsten Alarm auf {ziel_std:02d}:{ziel_min:02d}:00")
+    rtc.set_alarm(ziel_std, ziel_min, 0)
+
 
 def run_motor_debug():
     print("\n--- ESP32 Motor Debug gestartet ---")
@@ -199,12 +241,7 @@ def run_motor_debug():
         #rtc = DS3231(i2c)
 
         # Erstelle ein BTS7960 Motor Treiber instanz
-        motor = BTS7960Motor(32,
-                             33,
-                             25,
-                             26,
-                             22,
-                             23)
+        motor = L289NMotor(23,22, 26)
 
         message = input("Starte motor interaktion y/n:").strip().lower()
 
@@ -232,6 +269,26 @@ def run_motor_debug():
 
     # Wenn die Aufgabe erledigt ist oder wir außerhalb des Fensters wach wurden:
     #enter_deep_sleep(rtc, wake_pin)
+
+def main():
+    try:
+        print("Initialisiere Empfanger und Treiber...")
+
+        emfänger = Empfanger()
+        motor = L289NMotor(23, 22, 26)
+
+        while True:
+            msg = emfänger.lauschen()
+
+            if msg:
+                motor_interaktion(motor)
+                break
+
+
+    except KeyboardInterrupt:
+        print("Empfangen abgebrochen...")
+    except Exception as e:
+        print(f"Fehler bei dem Senden von daten: {e}")
 
 
 
@@ -356,4 +413,4 @@ Aufwecken durch Trigger : DEEP_SLEEP_RESET
 """
 
 if __name__ == "__main__":
-    run_motor_debug()
+    main()

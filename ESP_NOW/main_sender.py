@@ -10,8 +10,14 @@ from sender import Sender
 
 MSG = "Motor"
 WAKE_PIN = Pin(3, Pin.IN, Pin.PULL_DOWN)
-SENDE_ZEIT = 20*1e3
-#led_pin_num = 4
+POTENTIOMETER = esp32.WAKEUP_ANY_HIGH
+BUTTON = esp32.WAKEUP_ALL_LOW
+
+#Sende Zeit von 2200 ms um garantiert ein Packet im Rythmus des Empfängers zu verschicken.
+#Beachte: Sende Zeit diktiert implizit den delay der Interaktion.
+#Empfänger: Rythmus von 200 ms mit wach: 150 ms, 1800 ms
+SENDE_ZEIT = 2.2*1e3
+
 
 # ---- Messungen ----
 """adc =  ADC(WAKE_PIN)
@@ -23,7 +29,7 @@ UNTERESPANNUNGSGRENZE = 0-0.1 # [V]"""
 
 try:
 
-    time.sleep_ms(2000)
+    #time.sleep_ms(2000)
     """print("Aufgewacht...")
     grund = machine.reset_cause()
 
@@ -64,10 +70,12 @@ try:
     sender.deinit_sender()
 
     print("Initialisiere Trigger-Pin")
-    esp32.wake_on_gpio([WAKE_PIN], esp32.WAKEUP_ANY_HIGH)
+
+    #[BEACHTE]: Button möchte any low haben / Potentiometer braucht any high
+    esp32.wake_on_gpio([WAKE_PIN], BUTTON)
     #WAKE_PIN.irq(trigger=machine.Pin.IRQ_RISING)
 
-    time.sleep_ms(1000)
+    time.sleep_ms(2000)
 
     #start = time.ticks_ms()
     #machine.lightsleep()

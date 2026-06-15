@@ -93,3 +93,24 @@ class DS3231:
 
         # Flag vorsichtshalber direkt löschen
         self.clear_alarm()
+
+    def set_alarm(self, jahr, monat, stunde, minute, sekunde):
+        """
+        Programmiert Alarm 1 für eine tägliche Auslösung (Tag ist irrelevant).
+        Zieht den SQW-Pin zur Zielzeit auf LOW.
+        """
+        data = bytearray([
+            self._dec_to_bcd(sekunde) & 0x7F,
+            self._dec_to_bcd(minute) & 0x7F,
+            self._dec_to_bcd(stunde) & 0x7F,
+            0x80  # Setzt A1M4 auf 1 (Löst jeden Tag aus)
+        ])
+        self.i2c.writeto_mem(self.ADDR, self.REG_ALARM1, data)
+
+        # Alarm aktivieren: INTCN und A1IE im Kontroll-Register setzen
+        ctrl = self.i2c.readfrom_mem(self.ADDR, self.REG_CONTROL, 1)[0]
+        ctrl = ctrl | 0x05
+        self.i2c.writeto_mem(self.ADDR, self.REG_CONTROL, bytearray([ctrl]))
+
+        # Flag vorsichtshalber direkt löschen
+        self.clear_alarm()

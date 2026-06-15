@@ -102,12 +102,12 @@ class Sender:
 
                 except OSError as add_err:
                     print(f"Kritischer Fehler beim Nachregistrieren: {add_err}")
-                    self.deinit_sender()
+                    #self.deinit_sender() #DEinitialisieren 2 sek. Dauerfeuer Fehlermeldungen harmlos, lediglich nicht reagieren  des empfängers.
                     return False
             else:
                 # Ein ganz anderer Hardware-Fehler (z.B. WLAN aus)
                 print(f"Allgemeiner Sende-Fehler: {err}")
-                self.deinit_sender()
+                #self.deinit_sender()
                 return False
 
     """def wurde_pin_gedrückt(self):
